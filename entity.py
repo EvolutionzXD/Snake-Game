@@ -4,6 +4,7 @@ from resources import get_surfaces
 from effects import CameraShake, EffectManager  # Import 1 lần duy nhất
 from particle import ParticleManager
 from vfx import VFXManager
+from config import GLOBAL_SCALE
 
 STUN_TIME = 0.3
 INVINCIBILITY_TIME = 0.1
@@ -11,6 +12,7 @@ CELL_SIZE = 60.0
 
 # Hằng số offset cho grid - không tạo lại mỗi frame
 _GRID_OFFSETS = [(-1,-1), (0,-1), (1,-1), (-1,0), (0,0), (1,0), (-1,1), (0,1), (1,1)]
+_SCREEN_CENTER = pygame.math.Vector2(600, 400)
 
 active_nodes = []
 grid_mat = {}
@@ -21,7 +23,7 @@ class Node:
                  'hitbox_radius', 'MaxHp', 'Hp', 'knockback', 'stun', 'invincibility', 
                  'damage', 'mask', 'maskOut', 'textureOffsetX', 'textureOffsetY', 
                  'MinFrame', 'MaxFrame', 'frame', 'textureWidth', 'textureHeight', 
-                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'alpha', 'origin_pos']
+                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'alpha', 'origin_pos', 'snake_head', 'snake_depth']
 
     def __init__(self, pos):
         self.position = pygame.math.Vector2(pos)
@@ -37,7 +39,7 @@ class Node:
         self.invincibility = 0.0
         self.damage = 10.0
         self.mask = 0
-        self.maskOut = 0
+        self.maskOut = (0,)
         self.textureOffsetX = 0.0
         self.textureOffsetY = 0.0
         self.MinFrame = 0
@@ -61,6 +63,8 @@ class Node:
         self.has_trail_particles = True
         self.alpha = 255
         self.origin_pos = self.position.copy()
+        self.snake_head = None
+        self.snake_depth = 0
         active_nodes.append(self)
 
     def apply_config(self, config):
@@ -72,6 +76,8 @@ class Node:
         self.damage = config.damage
         self.mask = config.mask
         self.maskOut = config.maskOut
+        if not isinstance(self.maskOut, (list, tuple)):
+            self.maskOut = (self.maskOut,)
         self.MinFrame = config.MinFrame
         self.MaxFrame = config.MaxFrame
         self.textureWidth = config.textureWidth
@@ -89,8 +95,7 @@ class Node:
         other.Hp -= amount
         
         # Kiểm tra xem đòn đánh có nhắm vào kẻ địch (mask 1) không để hiện số damage
-        target_masks = self.maskOut if isinstance(self.maskOut, (list, tuple)) else [self.maskOut]
-        if 1 in target_masks:
+        if 1 in self.maskOut:
             EffectManager.get_instance().add_damage_number(other.position + pygame.math.Vector2(0, -30), amount)
         if self.canShakeCamera:
             CameraShake.get_instance().add_trauma(0.5)
@@ -134,20 +139,36 @@ class Node:
     def draw_outline(self, screen, camera):
         outline_surf, _ = self.get_surfaces()
         if not outline_surf: return
+        
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY) * GLOBAL_SCALE
+        
+        # Viewport Culling
+        w, h = outline_surf.get_size()
+        if draw_pos.x + w < 0 or draw_pos.x - w > screen.get_width() or draw_pos.y + h < 0 or draw_pos.y - h > screen.get_height():
+            return
+
         if self.flipX or self.flipY:
             outline_surf = pygame.transform.flip(outline_surf, self.flipX, self.flipY)
         outline_surf.set_alpha(self.alpha)
-        draw_pos = self.position - camera + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY)
         rect = outline_surf.get_rect(center=(draw_pos.x, draw_pos.y))
         screen.blit(outline_surf, rect)
 
     def draw_sprite(self, screen, camera):
         _, sprite_surf = self.get_surfaces()
         if not sprite_surf: return
+        
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY) * GLOBAL_SCALE
+        
+        # Viewport Culling
+        w, h = sprite_surf.get_size()
+        if draw_pos.x + w < 0 or draw_pos.x - w > screen.get_width() or draw_pos.y + h < 0 or draw_pos.y - h > screen.get_height():
+            return
+
         if self.flipX or self.flipY:
             sprite_surf = pygame.transform.flip(sprite_surf, self.flipX, self.flipY)
         sprite_surf.set_alpha(self.alpha)
-        draw_pos = self.position - camera + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY)
         rect = sprite_surf.get_rect(center=(draw_pos.x, draw_pos.y))
         screen.blit(sprite_surf, rect)
 
@@ -156,20 +177,26 @@ class Node:
         _, sprite_surf = self.get_surfaces()
         if not sprite_surf: return
         
-        # Cache bóng đổ theo surface id để tránh tính lại mask mỗi frame
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER + pygame.math.Vector2(self.textureOffsetX, -self.textureOffsetY*0.5) * GLOBAL_SCALE
+        
+        # Viewport Culling (do it before calculating shadow mask)
+        w, h = sprite_surf.get_size()
+        if draw_pos.x + w < 0 or draw_pos.x - w > screen.get_width() or draw_pos.y + h < 0 or draw_pos.y - h > screen.get_height():
+            return
+        
         surf_key = id(sprite_surf)
         if surf_key not in _shadow_cache:
             raw_shadow = pygame.mask.from_surface(sprite_surf).to_surface(setcolor=(0,0,0,80), unsetcolor=(0,0,0,0))
-            w, h = raw_shadow.get_size()
+            w_s, h_s = raw_shadow.get_size()
             raw_shadow = pygame.transform.flip(raw_shadow, False, True)
-            _shadow_cache[surf_key] = pygame.transform.scale(raw_shadow, (w, int(h * 0.5)))
+            _shadow_cache[surf_key] = pygame.transform.scale(raw_shadow, (w_s, int(h_s * 0.5)))
         
         shadow_surf = _shadow_cache[surf_key]
         if self.flipX or self.flipY:
             shadow_surf = pygame.transform.flip(shadow_surf, self.flipX, self.flipY)
             
-        draw_pos = self.position - camera + pygame.math.Vector2(self.textureOffsetX, -self.textureOffsetY*0.5)
-        rect = shadow_surf.get_rect(midtop=(draw_pos.x, draw_pos.y + 5))
+        rect = shadow_surf.get_rect(midtop=(draw_pos.x, draw_pos.y + 5 * GLOBAL_SCALE))
         screen.blit(shadow_surf, rect)
 
 def process_physics_and_collisions(dt):
@@ -266,10 +293,7 @@ def process_physics_and_collisions(dt):
 
     offsets = _GRID_OFFSETS
     for node in active_nodes:
-        # Hỗ trợ maskOut có thể là 1 giá trị hoặc 1 list các giá trị
-        target_masks = node.maskOut if isinstance(node.maskOut, (list, tuple)) else [node.maskOut]
-        
-        for maskOut in target_masks:
+        for maskOut in node.maskOut:
             if maskOut not in grid_mat: continue
             
             px, py = node.get_position_id()

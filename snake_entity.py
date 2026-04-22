@@ -27,6 +27,12 @@ class Snake:
             if body_cfg: self.nodes[i].apply_config(body_cfg)
             self.nodes[i].scaleMultiplier = shrinkRatio
 
+        if self.nodes:
+            head_node = self.nodes[0]
+            for i, node in enumerate(self.nodes):
+                node.snake_head = head_node
+                node.snake_depth = i
+
     def GetPosition(self):
         return self.nodes[0].position if self.nodes else pygame.math.Vector2(0,0)
 

@@ -8,6 +8,7 @@ from config import GetProjectileConfig, GetSwordAirDashConfig, GetFlameConfig, G
 from resources import ResourceManager
 from particle import ParticleManager
 from apple import AppleManager
+from config import GLOBAL_SCALE
 
 class Weapon:
     def __init__(self, name, config_func, texture_name="stick", fire_rate=0.2, speed=1200.0, 
@@ -185,9 +186,15 @@ class StandWeapon(Weapon):
             self.ghost_node.textureName = "apple_ghost"
             self.ghost_node.alpha = 180
             self.ghost_node.hasShadow = False
+            self.ghost_node.mask = -1     # Không va chạm với bất kỳ ai
+            self.ghost_node.maskOut = []  # Không gây sát thương cho bất kỳ ai
+            self.ghost_node.Hp = 999999   # Bất tử
+            self.ghost_node.invincibility = 999999
 
         # --- TÍNH TOÁN VỊ TRÍ MỤC TIÊU ---
-        mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos()) + manager.last_camera
+        mouse_scr = pygame.math.Vector2(pygame.mouse.get_pos())
+        screen_center = pygame.math.Vector2(600, 400)
+        mouse_pos = (mouse_scr - screen_center) / GLOBAL_SCALE + manager.last_camera + screen_center
         mouse_dir = (mouse_pos - manager.last_player_pos)
         
         if self.last_is_holding:
@@ -434,7 +441,9 @@ class RealitySlash(Weapon):
 
     def draw_special(self, screen, camera):
         if self.is_aiming and self.start_pos:
-            mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos()) + camera
+            mouse_scr = pygame.math.Vector2(pygame.mouse.get_pos())
+            screen_center = pygame.math.Vector2(600, 400)
+            mouse_pos = (mouse_scr - screen_center) / GLOBAL_SCALE + camera + screen_center
             self._draw_dashed_line(screen, self.start_pos, mouse_pos, camera, (200, 50, 50))
 
         new_slashes = []
@@ -443,14 +452,16 @@ class RealitySlash(Weapon):
             if s['life'] > 0:
                 progress = s['life'] / s['max_life']
                 alpha = int(progress * 255)
-                p1 = s['start'] - camera
-                p2 = s['end'] - camera
+                center = pygame.math.Vector2(600, 400)
+                target = camera + center
+                p1 = (s['start'] - target) * GLOBAL_SCALE + center
+                p2 = (s['end'] - target) * GLOBAL_SCALE + center
                 dist_vec = s['end'] - s['start']
                 
                 if dist_vec.length_squared() > 10:
                     perp = pygame.math.Vector2(-dist_vec.y, dist_vec.x).normalize()
                     # Giảm độ dày xuống 0.8 (từ 20 xuống khoảng 12-14)
-                    max_w = (14 * progress) + 1.5
+                    max_w = ((14 * progress) + 1.5) * GLOBAL_SCALE
                     
                     # Vẽ 2 lớp để tránh bị sọc: Hào quang đỏ và Lõi đen
                     # 1. Hào quang đỏ thẫm (Mờ và Rộng)
@@ -480,10 +491,12 @@ class RealitySlash(Weapon):
         dist_vec = end - start
         dist = dist_vec.length()
         if dist == 0: return
+        center = pygame.math.Vector2(600, 400)
+        target = camera + center
         for i in range(0, int(dist), dash_len * 2):
-            p1 = (start + dist_vec * (i / dist)) - camera
-            p2 = (start + dist_vec * (min(i + dash_len, dist) / dist)) - camera
-            pygame.draw.line(screen, color, p1, p2, 20)
+            p1 = (start + dist_vec * (i / dist) - target) * GLOBAL_SCALE + center
+            p2 = (start + dist_vec * (min(i + dash_len, dist) / dist) - target) * GLOBAL_SCALE + center
+            pygame.draw.line(screen, color, p1, p2, int(20 * GLOBAL_SCALE))
         
 class WeaponManager:
     _instance = None
@@ -525,8 +538,9 @@ class WeaponManager:
         self.active_weapon.update(self, dt)
         
         # Luôn cập nhật góc xoay dựa trên chuột để Stand cũng dùng được
-        mouse_pos = pygame.mouse.get_pos()
-        world_mouse = pygame.math.Vector2(mouse_pos) + camera
+        mouse_scr = pygame.math.Vector2(pygame.mouse.get_pos())
+        screen_center = pygame.math.Vector2(600, 400)
+        world_mouse = (mouse_scr - screen_center) / GLOBAL_SCALE + camera + screen_center
         direction = world_mouse - player_pos
         if direction.length_squared() > 0:
             target_angle = math.degrees(math.atan2(direction.y, direction.x))
@@ -555,7 +569,7 @@ class WeaponManager:
         weapon_tex = ResourceManager.get_instance().get_texture(tex_name)
         if not weapon_tex: return
         s = self.active_weapon.scale
-        surf = pygame.transform.scale(weapon_tex, (int(32 * s), int(32 * s)))
+        surf = pygame.transform.scale(weapon_tex, (int(32 * s * GLOBAL_SCALE), int(32 * s * GLOBAL_SCALE)))
         check_angle = (self.angle + 180) % 360 - 180
         flip_y = check_angle > 90 or check_angle < -90
         if flip_y:
@@ -571,7 +585,12 @@ class WeaponManager:
             jitter_ang = random.uniform(-intens*2, intens*2)
         self.last_final_angle = self.angle + current_swing + jitter_ang
         rot_surf = pygame.transform.rotate(surf, -self.last_final_angle + off)
-        dist = self.active_weapon.arm_len + self.active_weapon.stick_len - self.active_weapon.current_recoil
+        
+        center = pygame.math.Vector2(600, 400)
+        target = camera + center
+        rel_pos = (player_pos - target) * GLOBAL_SCALE + center
+        
+        dist = (self.active_weapon.arm_len + self.active_weapon.stick_len - self.active_weapon.current_recoil) * GLOBAL_SCALE
         rad = math.radians(self.last_final_angle)
-        draw_pos = (player_pos - camera) + pygame.math.Vector2(math.cos(rad) * dist, math.sin(rad) * dist) + jitter_pos
+        draw_pos = rel_pos + pygame.math.Vector2(math.cos(rad) * dist, math.sin(rad) * dist) + jitter_pos * GLOBAL_SCALE
         screen.blit(rot_surf, rot_surf.get_rect(center=(draw_pos.x, draw_pos.y)))

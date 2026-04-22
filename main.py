@@ -49,6 +49,10 @@ class GameManager:
         pause_font = pygame.font.SysFont("Impact", 80)
         self.pause_text = pause_font.render("PAUSED", True, (255, 255, 255))
         self.pause_text_rect = self.pause_text.get_rect(center=(self.screen_width/2, self.screen_height/2))
+        
+        # Pre-bake Stop overlay
+        self.stop_overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        self.stop_overlay.fill((0, 0, 0, 80))
 
     def setup(self):
         # Reset các biến game khi bắt đầu màn chơi mới
@@ -122,12 +126,7 @@ class GameManager:
             spawn_pos = player_pos + pygame.math.Vector2(math.cos(angle) * distance, math.sin(angle) * distance)
             
             try:
-                snake_configs = [
-                    config.GetNormalSnakeConfig,
-                    config.GetFastSnakeConfig,
-                    config.GetTankSnakeConfig
-                ]
-                chosen_config_func = random.choice(snake_configs)
+                chosen_config_func = random.choice([config.GetNormalSnakeConfig, config.GetFastSnakeConfig, config.GetTankSnakeConfig])
                 new_snake = Snake(spawn_pos, chosen_config_func())
             except (AttributeError, ImportError):
                 new_snake = Snake(spawn_pos, config.DefaultSnakeConfig())
@@ -150,8 +149,9 @@ class GameManager:
             keys = pygame.key.get_pressed()
             is_trying_to_attack = mouse_buttons[0] or keys[pygame.K_SPACE]
             
-            mouse_pos = pygame.mouse.get_pos()
-            world_mouse = pygame.math.Vector2(mouse_pos) + self.camera
+            mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
+            screen_center = pygame.math.Vector2(self.screen_width/2, self.screen_height/2)
+            world_mouse = (mouse_pos - screen_center) / config.GLOBAL_SCALE + self.camera + screen_center
             WeaponManager.get_instance().attack(AppleManager.GetPosition(), world_mouse, is_holding=is_trying_to_attack)
 
             self.mouse_dummy.position = AppleManager.GetPosition()
@@ -188,9 +188,10 @@ class GameManager:
                     head_j = self.snakes[j].GetHead()
                     if head_j:
                         diff = head.position - head_j.position
-                        diff_sq = diff.length_squared()
-                        if diff_sq < 150*150: 
-                            self.snakes[i].attract(head_j, -0.02)
+                        if abs(diff.x) < 150 and abs(diff.y) < 150:
+                            diff_sq = diff.length_squared()
+                            if diff_sq < 150*150: 
+                                self.snakes[i].attract(head_j, -0.02)
                 
             AppleManager.Process(dt)
             process_physics_and_collisions(dt)
@@ -203,22 +204,10 @@ class GameManager:
         TileManager.get_instance().process_and_draw(self.screen, shaken_camera)
         
         if not self.is_paused and EffectManager.get_instance().is_hitstopping():
-            stop_overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-            stop_overlay.fill((0, 0, 0, 80)) 
-            self.screen.blit(stop_overlay, (0, 0))            
+            self.screen.blit(self.stop_overlay, (0, 0))            
             
         # --- HỆ THỐNG Y-SORTING TỐI ƯU ---
         apple_node_ref = AppleManager.apple_node
-        node_to_snake_head_y = {}
-        node_to_depth = {}
-        
-        for s in self.snakes:
-            if not s.nodes: continue
-            head_y = s.nodes[0].position.y
-            for idx, node in enumerate(s.nodes):
-                nid = id(node)
-                node_to_snake_head_y[nid] = head_y
-                node_to_depth[nid] = idx # 0 là đầu, tăng dần là đuôi
         
         def get_render_priority(node):
             # Các layer đặc biệt luôn nằm trên cùng
@@ -227,18 +216,10 @@ class GameManager:
             if node is apple_node_ref: return node.position.y + 100000 # Táo (Player) luôn ưu tiên cao hơn chút trong cùng mức Y
             
             # Lấy Y gốc
-            base_y = node.position.y
-            
-            # Nếu là đốt rắn, dùng Y của đầu để tính toán layer
-            nid = id(node)
-            if nid in node_to_snake_head_y:
-                base_y = node_to_snake_head_y[nid]
-                # Trong cùng 1 con rắn, vẽ từ đuôi (depth cao) đến đầu (depth 0)
-                # Đuôi có priority thấp hơn đầu
-                depth = node_to_depth.get(nid, 0)
-                return base_y - (depth * 0.01) 
+            if node.snake_head:
+                return node.snake_head.position.y - (node.snake_depth * 0.01)
                 
-            return base_y
+            return node.position.y
 
         render_nodes = sorted(
             (n for n in active_nodes if n.mask != -1),
@@ -258,7 +239,6 @@ class GameManager:
         EffectManager.get_instance().update_and_draw(dt, self.screen, shaken_camera)
         drawhitbox.draw_node_hitboxes(self.screen, shaken_camera, active_nodes)
         self.player_gui.draw(self.screen, AppleManager.apple_node, dt)
-        self.cursor.draw(self.screen, dt)
         self.fps_counter.draw(self.screen, self.clock, len(active_nodes), len(self.snakes), len(EnvironmentalManager.get_instance().active_objects))
 
         if self.is_paused:

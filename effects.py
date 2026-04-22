@@ -1,5 +1,6 @@
 import pygame
 import random
+from config import GLOBAL_SCALE
 
 class CameraShake:
     _instance = None
@@ -47,33 +48,36 @@ class DamageNumber:
         if self.amount < 1: return
         # Tính toán tỉ lệ scale (nhảy vọt lúc đầu rồi thu nhỏ)
         progress = self.lifetime / self.max_lifetime
-        # Hiệu ứng pop-in: to ra ở 20% đầu tiên
+        # Hiệu ứng pop-in
         if progress > 0.8:
-            scale = 1.0 + (1.0 - progress) * 5.0 # Pop to gấp đôi
+            scale = 1.0 + (1.0 - progress) * 5.0 
         else:
-            scale = progress * 1.25 # Nhỏ dần về 0
+            scale = progress * 1.25 
             
+        final_scale = scale * GLOBAL_SCALE
         alpha = int(progress * 255)
         text = self.font.render(str(int(self.amount)), True, self.color)
         
         # Scale surface
-        if scale != 1.0:
-            w, h = text.get_size()
-            text = pygame.transform.scale(text, (int(w * scale), int(h * scale)))
+        w, h = text.get_size()
+        text = pygame.transform.scale(text, (int(w * final_scale), int(h * final_scale)))
             
         # Viền chữ
         text_outline = self.font.render(str(int(self.amount)), True, (0, 0, 0))
-        if scale != 1.0:
-            text_outline = pygame.transform.scale(text_outline, (int(w * scale), int(h * scale)))
+        text_outline = pygame.transform.scale(text_outline, (int(w * final_scale), int(h * final_scale)))
             
         text_outline.set_alpha(alpha)
         text.set_alpha(alpha)
         
-        pos = self.position - camera
+        center = pygame.math.Vector2(600, 400)
+        target = camera + center
+        pos = (self.position - target) * GLOBAL_SCALE + center
+        
         rect = text.get_rect(center=(pos.x, pos.y))
         
-        screen.blit(text_outline, (rect.x - 2, rect.y - 2))
-        screen.blit(text_outline, (rect.x + 2, rect.y + 2))
+        off = 2 * GLOBAL_SCALE
+        screen.blit(text_outline, (rect.x - off, rect.y - off))
+        screen.blit(text_outline, (rect.x + off, rect.y + off))
         screen.blit(text, rect)
 
 class EffectManager:

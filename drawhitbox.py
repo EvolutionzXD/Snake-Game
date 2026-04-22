@@ -1,4 +1,5 @@
 import pygame
+from config import GLOBAL_SCALE
 
 SHOW_HITBOXES = True
 
@@ -8,19 +9,25 @@ def draw_node_hitboxes(screen, camera, active_nodes):
     """
     if not SHOW_HITBOXES: return
 
+    center_screen = pygame.math.Vector2(600, 400)
+    target_cam = camera + center_screen
+
     for node in active_nodes:
         if node.is_dead or node.is_dummy:
             continue
             
         # Không vẽ hitbox cho lớp cỏ Tile (do maskOut = -2)
-        target_masks = node.maskOut if isinstance(node.maskOut, (list, tuple)) else [node.maskOut]
-        if -2 in target_masks:
+        if -2 in node.maskOut:
             continue
 
-        radius = int(node.hitbox_radius * node.scaleMultiplier)
+        radius = int(node.hitbox_radius * node.scaleMultiplier * GLOBAL_SCALE)
         if radius <= 0: continue
             
-        draw_pos = node.position - camera
+        draw_pos = (node.position - target_cam) * GLOBAL_SCALE + center_screen
+        
+        # Viewport Culling
+        if draw_pos.x + radius < 0 or draw_pos.x - radius > screen.get_width() or draw_pos.y + radius < 0 or draw_pos.y - radius > screen.get_height():
+            continue
         
         # Tạo vòng tròn viền thể hiện hitbox
         surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)

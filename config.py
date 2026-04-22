@@ -1,3 +1,5 @@
+GLOBAL_SCALE = 0.75
+
 class NodeConfig:
     def __init__(self, textureName="", mask=0, maskOut=0, hitbox_radius=30.0, 
                  MaxHp=100.0, knockback=10.0, damage=10.0, MinFrame=0, MaxFrame=0, 
@@ -57,7 +59,7 @@ def GetGhostPunchConfig():
         mask            = 2,
         maskOut         = [1, 5],
         hitbox_radius   = 40.0,
-        knockback       = 100.0,
+        knockback       = 300.0,
         damage          = 25.0,
         MaxFrame        = 1,      # 2 frame đấm (trái - phải)
         scaleMultiplier = 0.7,

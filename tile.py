@@ -5,11 +5,11 @@ import time
 import random
 from entity import Node, active_nodes
 from resources import get_surfaces
-from config import GetRockConfig, GetTreeConfig
+from config import GetRockConfig, GetTreeConfig, GLOBAL_SCALE
 
 TILE_SIZE = 64.0
-GRID_COLS = 24
-GRID_ROWS = 18
+GRID_COLS = int(24 / GLOBAL_SCALE)
+GRID_ROWS = int(18 / GLOBAL_SCALE)
 TOTAL_WIDTH = TILE_SIZE * GRID_COLS
 TOTAL_HEIGHT = TILE_SIZE * GRID_ROWS
 
@@ -154,7 +154,7 @@ class Tile(Node):
         self.hasOutline = False
         self.hasShadow = False
         self.mask = -1
-        self.maskOut = -2
+        self.maskOut = (-2,)
         self.current_obj = None # Vật thể đang đứng trên tile này
         self.update_terrain()
 
@@ -223,6 +223,14 @@ class Tile(Node):
             self.update_terrain()
 
     def draw_sprite(self, screen, camera):
+        target = camera + pygame.math.Vector2(600, 400)
+        draw_pos = (self.position - target) * GLOBAL_SCALE + pygame.math.Vector2(600, 400)
+        
+        # Viewport Culling chung cho cả Tile và Border
+        s = 64 * self.scaleMultiplier * GLOBAL_SCALE * 3 # Kích thước an toàn
+        if draw_pos.x + s < 0 or draw_pos.x - s > screen.get_width() or draw_pos.y + s < 0 or draw_pos.y - s > screen.get_height():
+            return
+            
         # Vẽ base tile (cỏ/đá tĩnh)
         super().draw_sprite(screen, camera)
         
@@ -231,8 +239,8 @@ class Tile(Node):
             for b_idx in self.borders:
                 _, border_surf = get_surfaces("stone_border", b_idx, 4.0, self.scaleMultiplier, 0.0, 0.0, False)
                 if border_surf:
-                    draw_pos = self.position - camera + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY)
-                    rect = border_surf.get_rect(center=(draw_pos.x, draw_pos.y))
+                    b_pos = draw_pos + pygame.math.Vector2(self.textureOffsetX, self.textureOffsetY) * GLOBAL_SCALE
+                    rect = border_surf.get_rect(center=(b_pos.x, b_pos.y))
                     screen.blit(border_surf, rect)
 
 class TileManager:

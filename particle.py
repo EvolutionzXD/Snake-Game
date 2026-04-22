@@ -2,6 +2,10 @@ import pygame
 import random
 import math
 from resources import ResourceManager
+from config import GLOBAL_SCALE
+
+_SCREEN_CENTER = pygame.math.Vector2(600, 400)
+_SQUARE_SURF_CACHE = {}
 
 class SquareParticle:
     __slots__ = ['pos', 'vel', 'size', 'color', 'alpha', 'lifetime', 'max_lifetime',
@@ -23,10 +27,13 @@ class SquareParticle:
         self._surf    = None
 
     def _make_surf(self):
-        s = max(1, int(self.size))
-        raw = pygame.Surface((s, s), pygame.SRCALPHA)
-        raw.fill((*self.color, 255))
-        self._surf = raw
+        s = max(1, int(self.size * GLOBAL_SCALE))
+        key = (s, self.color)
+        if key not in _SQUARE_SURF_CACHE:
+            raw = pygame.Surface((s, s), pygame.SRCALPHA)
+            raw.fill((*self.color, 255))
+            _SQUARE_SURF_CACHE[key] = raw
+        self._surf = _SQUARE_SURF_CACHE[key]
 
     def is_alive(self): return self.lifetime > 0
 
@@ -39,15 +46,21 @@ class SquareParticle:
 
     def draw(self, screen, camera):
         if self.lifetime <= 0: return
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.pos - target) * GLOBAL_SCALE + _SCREEN_CENTER
+        
+        # Viewport Culling
+        if draw_pos.x + 20 < 0 or draw_pos.x - 20 > screen.get_width() or draw_pos.y + 20 < 0 or draw_pos.y - 20 > screen.get_height():
+            return
+            
         ratio  = self.lifetime / self.max_lifetime
         alpha  = int(self.alpha * ratio)
         if self._surf is None: self._make_surf()
-        rotated = pygame.transform.rotate(self._surf, self.rotation)
-        rotated.set_alpha(alpha)
-        draw_pos = self.pos - camera
-        rect = rotated.get_rect(center=(draw_pos.x, draw_pos.y))
+        
+        self._surf.set_alpha(alpha)
+        rect = self._surf.get_rect(center=(draw_pos.x, draw_pos.y))
         flags = pygame.BLEND_RGB_ADD if self.use_additive else 0
-        screen.blit(rotated, rect, special_flags=flags)
+        screen.blit(self._surf, rect, special_flags=flags)
 
 class TexturedParticle(SquareParticle):
     __slots__ = ['texture_name', '_orig_img']
@@ -59,7 +72,7 @@ class TexturedParticle(SquareParticle):
     def _make_surf(self):
         img = ResourceManager.get_instance().get_texture(self.texture_name)
         if img:
-            s = max(1, int(self.size))
+            s = max(1, int(self.size * GLOBAL_SCALE))
             self._orig_img = pygame.transform.scale(img, (s, s))
             self._surf = self._orig_img
         else:
@@ -68,13 +81,20 @@ class TexturedParticle(SquareParticle):
 
     def draw(self, screen, camera):
         if self.lifetime <= 0: return
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.pos - target) * GLOBAL_SCALE + _SCREEN_CENTER
+        
+        # Viewport Culling
+        if draw_pos.x + 40 < 0 or draw_pos.x - 40 > screen.get_width() or draw_pos.y + 40 < 0 or draw_pos.y - 40 > screen.get_height():
+            return
+            
         ratio  = self.lifetime / self.max_lifetime
         alpha  = int(self.alpha * ratio)
         if self._surf is None: self._make_surf()
         if self._orig_img:
             rotated = pygame.transform.rotate(self._orig_img, self.rotation)
             rotated.set_alpha(alpha)
-            draw_pos = self.pos - camera
+            
             rect = rotated.get_rect(center=(draw_pos.x, draw_pos.y))
             flags = pygame.BLEND_RGB_ADD if self.use_additive else 0
             screen.blit(rotated, rect, special_flags=flags)

@@ -1,5 +1,7 @@
 import pygame
 import os
+from config import GLOBAL_SCALE
+
 
 class ResourceManager:
     _instance = None
@@ -34,7 +36,7 @@ def get_surfaces(texture_name, frame, base_scale, scale_mult, angle, flash_effec
     q_scale = round(scale_mult, 1)         
     q_flash = 1 if flash_effect > 0 else 0 
     
-    key = (texture_name, frame, base_scale, q_scale, q_angle, q_flash, hasOutline)
+    key = (texture_name, frame, base_scale, q_scale, q_angle, q_flash, hasOutline, GLOBAL_SCALE)
     if key in _RENDER_CACHE:
         return _RENDER_CACHE[key]
 
@@ -43,7 +45,12 @@ def get_surfaces(texture_name, frame, base_scale, scale_mult, angle, flash_effec
     try: raw_surf = tex.subsurface(rect)
     except ValueError: raw_surf = tex
 
-    final_scale = base_scale * q_scale
+    final_scale = base_scale * q_scale * GLOBAL_SCALE
+    
+    # Xử lý xóa kẽ hở (Seams) cho Tile khi thu nhỏ ở tỷ lệ lẻ
+    if texture_name in ["grass", "stone", "stone_border"]:
+        final_scale *= 1.02 # Thêm 2% kích thước để các ô gạch gối đầu lên nhau
+        
     if final_scale != 1.0:
         main_surf = pygame.transform.scale(raw_surf, (int(tex_w * final_scale), int(tex_h * final_scale)))
     else:
