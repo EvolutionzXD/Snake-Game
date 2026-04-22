@@ -1,4 +1,4 @@
-# 🐍 Py-Snake: Ultimate Evolution
+# 🐍 Snake Game
 
 Dự án này là một **Custom Game Engine 2D** được viết bằng **Python & Pygame**, thiết kế theo cấu trúc module linh hoạt giúp dễ dàng đọc hiểu và mở rộng.
 

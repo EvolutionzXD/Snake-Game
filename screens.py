@@ -70,12 +70,12 @@ class MainMenu:
         for i in range(3): # Vẽ layer chồng lên nhau tạo độ dày
             offset = math.sin(self.timer * 2 + i*0.2) * 10
             color = (30 + i*20, 100 + i*40, 30 + i*20)
-            title_surf = self.title_font.render("PY-SNAKE", True, color)
+            title_surf = self.title_font.render("SNAKE GAME", True, color)
             title_rect = title_surf.get_rect(center=(self.screen_w // 2, 220 + offset))
             screen.blit(title_surf, title_rect)
 
         # 2. Vẽ Sub-title
-        sub_text = self.sub_font.render("ULTIMATE EVOLUTION", True, (150, 150, 150))
+        sub_text = self.sub_font.render("EVOLVED", True, (150, 150, 150))
         sub_rect = sub_text.get_rect(center=(self.screen_w // 2, 290 + math.sin(self.timer * 2) * 5))
         screen.blit(sub_text, sub_rect)
         
