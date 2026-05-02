@@ -1,4 +1,4 @@
-GLOBAL_SCALE = 0.75
+GLOBAL_SCALE = 1
 
 class NodeConfig:
     def __init__(self, textureName="", mask=0, maskOut=0, hitbox_radius=30.0, 

@@ -4,6 +4,7 @@ import random
 from entity import Node
 from config import GetSnakeHeadConfig, GetSnakeBodyConfig
 from particle import ParticleManager
+from apple import AppleManager
 
 class Snake:
     def __init__(self, startPos, config):
@@ -11,6 +12,11 @@ class Snake:
         self.MaxVelocity = getattr(config, 'velocity', 350.0)
         self.BodyLength = getattr(config, 'length', 15.0)
         self.nodes = [Node(startPos) for _ in range(getattr(config, 'size', 10))]
+        
+        # 15% xác suất rắn "não to" (đón đầu gắt), còn lại "não nhỏ" (ngắm thẳng)
+        self.is_big_brain = getattr(config, 'is_big_brain', random.random() < 0.15)
+        self.intercept_factor = random.uniform(0.5, 1.2) if self.is_big_brain else random.uniform(-0.1, 0.2)
+        self.intercept_timer = random.uniform(1.0, 3.0)
         
         # Scaling logic constant
         self.scale_logic = getattr(config, 'scale_logic', 4.0)
@@ -41,7 +47,15 @@ class Snake:
 
     def attract(self, target_node, Smoothing):
         if not self.nodes or not target_node: return
-        offset = target_node.position - self.nodes[0].position
+        
+        # Nếu đang tấn công mục tiêu (Smoothing >= 0), áp dụng logic dự đoán đường đi
+        if Smoothing >= 0:
+            target_vel = target_node.direction + target_node.velocity
+            predicted_pos = target_node.position + target_vel * self.intercept_factor
+        else:
+            predicted_pos = target_node.position
+            
+        offset = predicted_pos - self.nodes[0].position
         if offset.length_squared() > 0:
             TargetSpeed = offset.normalize() * (self.MaxVelocity if Smoothing >= 0 else -self.MaxVelocity)
             self.nodes[0].direction = self.nodes[0].direction.lerp(TargetSpeed, abs(Smoothing))
@@ -55,10 +69,40 @@ class Snake:
             update_func(self, dt)
             return
 
+        self._update_intercept_factor(dt)
+        self._handle_outscreen_teleport()
         self._handle_death_propagation(dt)
         self._update_movement(dt)
         self._update_body_trailing(dt)
         self._emit_particles(dt)
+
+    def _update_intercept_factor(self, dt):
+        self.intercept_timer -= dt
+        if self.intercept_timer <= 0:
+            # Rắn não to giữ thói quen đón đầu, rắn thường chỉ ngắm thẳng hoặc hơi bám đuôi
+            self.intercept_factor = random.uniform(0.5, 1.2) if getattr(self, 'is_big_brain', False) else random.uniform(-0.1, 0.2)
+            self.intercept_timer = random.uniform(2.0, 5.0)
+
+    def _handle_outscreen_teleport(self):
+        player_pos = AppleManager.GetPosition()
+        head = self.nodes[0]
+        dist_sq = head.position.distance_squared_to(player_pos)
+        
+        if dist_sq > 1000 * 1000:
+            player_node = AppleManager.apple_node
+            if player_node and (player_node.direction.length_squared() > 10 or player_node.velocity.length_squared() > 10):
+                player_vel = player_node.direction + player_node.velocity
+                move_angle = math.atan2(player_vel.y, player_vel.x)
+                angle = move_angle + random.uniform(-0.5, 0.5)
+            else:
+                angle = random.uniform(0, 2 * math.pi)
+            
+            teleport_dir = pygame.math.Vector2(math.cos(angle), math.sin(angle))
+            teleport_pos = player_pos + teleport_dir * random.uniform(1000, 1300)
+            
+            for node in self.nodes:
+                node.position = pygame.math.Vector2(teleport_pos)
+                node.velocity *= 0
 
     def _handle_death_propagation(self, dt):
         num_nodes = len(self.nodes)

@@ -2,7 +2,8 @@ import pygame
 
 class FPSCounter:
     def __init__(self, font_size=20, color=(255, 255, 255), position=(10, 10)):
-        self.font = pygame.font.SysFont("Arial", font_size, bold=True)
+        from resources import ResourceManager
+        self.font = ResourceManager.get_instance().get_font("VCRosdNEUE", font_size)
         self.color = color
         self.position = position
         

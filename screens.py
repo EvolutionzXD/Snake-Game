@@ -3,6 +3,7 @@ import math
 
 class MenuButton:
     def __init__(self, text, pos, size=(300, 60)):
+        from resources import ResourceManager
         self.text = text
         self.pos = pygame.math.Vector2(pos)
         self.size = size
@@ -10,7 +11,7 @@ class MenuButton:
         self.rect = pygame.Rect(pos[0] - size[0]//2, pos[1] - size[1]//2, size[0], size[1])
         self.is_hovered = False
         self.scale = 1.0
-        self.font = pygame.font.SysFont("Impact", 40)
+        self.font = ResourceManager.get_instance().get_font("GrapeSoda", 50)
         
     def update(self, mouse_pos, dt):
         self.is_hovered = self.rect.collidepoint(mouse_pos)
@@ -43,14 +44,12 @@ class MenuButton:
 
 class MainMenu:
     def __init__(self, screen_w, screen_h):
+        from resources import ResourceManager
         self.screen_w = screen_w
         self.screen_h = screen_h
-        try:
-            self.title_font = pygame.font.SysFont("Impact", 110)
-            self.sub_font = pygame.font.SysFont("Arial", 24, bold=True)
-        except:
-            self.title_font = pygame.font.Font(None, 110)
-            self.sub_font = pygame.font.Font(None, 24)
+        
+        self.title_font = ResourceManager.get_instance().get_font("GrapeSoda", 140)
+        self.sub_font = ResourceManager.get_instance().get_font("VCRosdNEUE", 30)
             
         self.buttons = [
             MenuButton("START GAME", (screen_w // 2, screen_h // 2 + 20)),
@@ -85,7 +84,9 @@ class MainMenu:
             btn.draw(screen)
             
         # 4. Vẽ footer nhỏ
-        footer = pygame.font.SysFont("Arial", 14).render("v1.0 - Created with Antigravity", True, (60, 60, 60))
+        from resources import ResourceManager
+        footer_font = ResourceManager.get_instance().get_font("VCRosdNEUE", 16)
+        footer = footer_font.render("v1.0 - Created with Antigravity", True, (60, 60, 60))
         screen.blit(footer, (20, self.screen_h - 30))
 
     def handle_event(self, event):

@@ -29,13 +29,14 @@ class CameraShake:
 
 class DamageNumber:
     def __init__(self, pos, amount, color=(255, 255, 100), size=50):
+        from resources import ResourceManager
         self.position = pygame.math.Vector2(pos)
         self.velocity = pygame.math.Vector2(random.uniform(-30, 30), random.uniform(-150, -80))
         self.amount = amount
         self.lifetime = 0.8
         self.max_lifetime = 0.8
         self.color = color
-        self.font = pygame.font.SysFont("Impact", size)
+        self.font = ResourceManager.get_instance().get_font("GrapeSoda", size)
         
     def update(self, dt):
         self.lifetime -= dt

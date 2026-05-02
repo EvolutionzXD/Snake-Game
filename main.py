@@ -28,6 +28,10 @@ class GameManager:
         pygame.display.set_caption("Snake Game")
         self.clock = pygame.time.Clock()
         self.is_paused = False
+        # Load tài nguyên ngay từ đầu để các thành phần GUI có thể lấy font/texture
+        ResourceManager.get_instance().load_all_sprites("assets/sprite")
+        ResourceManager.get_instance().load_all_fonts("assets/font")
+
         self.fps_counter = FPSCounter()
         self.player_gui = PlayerGUI()
         self.cursor = CustomCursor()
@@ -46,7 +50,7 @@ class GameManager:
         # Pre-bake Pause overlay một lần, không tạo lại mỗi frame
         self.pause_overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
         self.pause_overlay.fill((0, 0, 0, 150))
-        pause_font = pygame.font.SysFont("Impact", 80)
+        pause_font = ResourceManager.get_instance().get_font("GrapeSoda", 120)
         self.pause_text = pause_font.render("PAUSED", True, (255, 255, 255))
         self.pause_text_rect = self.pause_text.get_rect(center=(self.screen_width/2, self.screen_height/2))
         
@@ -63,8 +67,6 @@ class GameManager:
         self.camera = pygame.math.Vector2(AppleManager.GetPosition() - pygame.math.Vector2(self.screen_width/2, self.screen_height/2))
 
     def run(self):
-        # Load tất cả sprite từ đầu để Menu có thể sử dụng (ví dụ: Custom Cursor)
-        ResourceManager.get_instance().load_all_sprites("assets/sprite")
         self.running = True
         
         while self.running:

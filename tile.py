@@ -262,7 +262,8 @@ class TileManager:
 
     def process_and_draw(self, screen, camera):
         if not hasattr(self, 'font'):
-            self.font = pygame.font.SysFont("Arial", 16, bold=True)
+            from resources import ResourceManager
+            self.font = ResourceManager.get_instance().get_font("VCRosdNEUE", 16)
             
         screen_w = screen.get_width()
         screen_h = screen.get_height()

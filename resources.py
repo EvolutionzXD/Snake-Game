@@ -12,6 +12,7 @@ class ResourceManager:
 
     def __init__(self):
         self.textures = {}
+        self.fonts = {} # path -> {size -> Font}
 
     def load_all_sprites(self, directory):
         if not os.path.exists(directory): return
@@ -23,8 +24,33 @@ class ResourceManager:
                     self.textures[name] = pygame.image.load(path).convert_alpha()
                 except: continue
 
+    def load_all_fonts(self, directory):
+        if not os.path.exists(directory): return
+        for file in os.listdir(directory):
+            if file.endswith((".ttf", ".otf")):
+                name = os.path.splitext(file)[0]
+                path = os.path.join(directory, file)
+                self.fonts[name] = path
+
     def get_texture(self, name):
         return self.textures.get(name, None)
+
+    def get_font(self, name, size):
+        path = self.fonts.get(name)
+        if not path:
+            return pygame.font.SysFont("Arial", size)
+        
+        # Cache font objects by size to avoid reloading
+        if not hasattr(self, '_font_cache'):
+            self._font_cache = {}
+        
+        key = (name, size)
+        if key not in self._font_cache:
+            try:
+                self._font_cache[key] = pygame.font.Font(path, size)
+            except:
+                return pygame.font.SysFont("Arial", size)
+        return self._font_cache[key]
 
 _RENDER_CACHE = {}
 

@@ -24,28 +24,36 @@ class ProgressBar:
         elif self.last_ratio < ratio:
             self.last_ratio = ratio # Nếu hồi máu thì thanh vụt đầy lên ngay lập tức
                 
+        radius = self.rect.height // 2
         # Background
-        pygame.draw.rect(screen, self.bg_color, self.rect)
+        pygame.draw.rect(screen, self.bg_color, self.rect, border_radius=radius)
         
         # Thanh smooth lastHP (Chậm chạp tụt xuống sau khi nhận sát thương)
-        smooth_rect = self.rect.copy()
-        smooth_rect.width = int(self.rect.width * self.last_ratio)
-        pygame.draw.rect(screen, self.smooth_color, smooth_rect)
+        if self.last_ratio > 0:
+            smooth_rect = self.rect.copy()
+            smooth_rect.width = int(self.rect.width * self.last_ratio)
+            # Đảm bảo width tối thiểu để không bị lỗi vẽ khi quá nhỏ
+            if smooth_rect.width >= 1:
+                pygame.draw.rect(screen, self.smooth_color, smooth_rect, border_radius=radius)
         
         # Thanh current HP
-        fill_rect = self.rect.copy()
-        fill_rect.width = int(self.rect.width * ratio)
-        pygame.draw.rect(screen, self.color, fill_rect)
+        if ratio > 0:
+            fill_rect = self.rect.copy()
+            fill_rect.width = int(self.rect.width * ratio)
+            if fill_rect.width >= 1:
+                pygame.draw.rect(screen, self.color, fill_rect, border_radius=radius)
         
         # Viền
-        pygame.draw.rect(screen, (20, 20, 20), self.rect, 3)
+        pygame.draw.rect(screen, (20, 20, 20), self.rect, 6, border_radius=radius)
 
 class PlayerGUI:
     def __init__(self):
+        from resources import ResourceManager
         self.hp_bar = None
         self.stamina_bar = None
-        self.font = pygame.font.SysFont("Arial", 16, bold=True)
-        self.label_font = pygame.font.SysFont("Arial", 18, bold=True)
+        # Sử dụng font GrapeSoda giống dmg number cho đồng bộ
+        self.font = ResourceManager.get_instance().get_font("GrapeSoda", 28)
+        self.label_font = ResourceManager.get_instance().get_font("GrapeSoda", 40)
         
     def draw(self, screen, player_node, dt):
         if not player_node: return
@@ -53,15 +61,15 @@ class PlayerGUI:
         from apple import AppleManager
         
         if not self.hp_bar:
-            bar_w = 250
-            bar_h = 20
+            bar_w = 550*3/4
+            bar_h = 30
             bar_x = 20
             bar_y = 35 # Để dành chỗ cho chữ Player ở trên
             # Đổi sang màu xanh lục đặc trưng của Player, smooth màu trắng
             self.hp_bar = ProgressBar((bar_x, bar_y, bar_w, bar_h), color=(40, 200, 40), smooth_color=(255, 255, 255))
             
             # Khởi tạo thanh Stamina ngay bên dưới 
-            self.stamina_bar = ProgressBar((bar_x, bar_y + bar_h + 5, bar_w - 50, bar_h - 6), color=(40, 150, 255), smooth_color=(255, 255, 255))
+            self.stamina_bar = ProgressBar((bar_x, bar_y + bar_h + 5, bar_w, bar_h), color=(40, 150, 255), smooth_color=(255, 255, 255))
             
         self.hp_bar.draw(screen, player_node.Hp, player_node.MaxHp, dt)
         self.stamina_bar.draw(screen, AppleManager.stamina, AppleManager.max_stamina, dt)
