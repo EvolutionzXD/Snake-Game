@@ -8,6 +8,10 @@ class FPSCounter:
         self.position = position
         
     def draw(self, screen, clock, node_count, snake_count=0, static_count=0):
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("video", "show_fps"):
+            return
+            
         fps = str(int(clock.get_fps()))
         fps_text = self.font.render(f"FPS: {fps}", True, (0, 255, 0))
         node_text = self.font.render(f"Nodes: {node_count}", True, (200, 200, 255))

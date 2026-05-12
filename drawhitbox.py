@@ -1,13 +1,10 @@
 import pygame
 from config import GLOBAL_SCALE
 
-SHOW_HITBOXES = True
-
 def draw_node_hitboxes(screen, camera, active_nodes):
     """
     Hàm tĩnh hỗ trợ vẽ đường viền (Hitbox) của các Entity để kiểm tra va chạm.
     """
-    if not SHOW_HITBOXES: return
 
     center_screen = pygame.math.Vector2(600, 400)
     target_cam = camera + center_screen

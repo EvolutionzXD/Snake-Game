@@ -16,7 +16,7 @@ TOTAL_HEIGHT = TILE_SIZE * GRID_ROWS
 def get_terrain_type(grid_x, grid_y):
     # Dùng Scale nhỏ lại rất lới để tạo thành các VÙNG BIOME (quần xã) khổng lồ
     # Càng nhỏ thì bãi đá/cỏ càng rộng và liền mạch.
-    scale = 0.05
+    scale = 0.01
     
     # Octaves cao giúp rìa biome có độ gồ ghề ngẫu nhiên một chút
     noise_val = noise.pnoise2(grid_x * scale, 
@@ -26,7 +26,7 @@ def get_terrain_type(grid_x, grid_y):
                               lacunarity=2.0)
     
     # Giá trị noise thường nằm trong khoảng -1.0 -> 1.0
-    if noise_val > 0.4:  # Tăng ngưỡng lên để Cỏ (grass) chiếm phần lớn diện tích
+    if noise_val > 0.3:  # Tăng ngưỡng lên để Cỏ (grass) chiếm phần lớn diện tích
         tex = "stone"
     else:
         tex = "grass"
@@ -52,10 +52,12 @@ class EnvironmentalManager:
         scale = 0.12
         val = noise.pnoise2(gx * scale + 5000, gy * scale + 5000, octaves=2)
         
-        # Ngưỡng vật thể (tăng lên để thưa hơn, tui để 0.35 cho thoáng)
-        if val > 0.35: 
-            if terrain_type == "stone": return "rock"
-            if terrain_type == "grass": return "tree"
+        # Ngưỡng vật thể (Hạ thấp ngưỡng của grass để ra nhiều bụi cỏ hơn)
+        if terrain_type == "grass" and val > 0.2: # Nhiều bush hơn
+            return "tree" # "tree" thực chất là bush trong config
+        elif terrain_type == "stone" and val > 0.35: # Giữ nguyên độ hiếm của đá
+            return "rock"
+            
         return None
 
     def update_respawns(self):
@@ -123,19 +125,28 @@ class EnvironmentalManager:
             if obj.is_dead or obj.Hp <= 0:
                 # XỬ LÝ NỔ VÀ RƠI ĐỒ (Chỉ khi Hp <= 0 thật sự)
                 if obj.Hp <= 0:
-                    color = (120, 120, 120) if obj.textureName == "rock" else (100, 70, 40)
+                    # Đá thì văng bụi xám, Bụi cây thì văng lá xanh
+                    is_bush = obj.textureName != "rock"
+                    color = (120, 120, 120) if not is_bush else (34, 139, 34)
                     pm.spawn(
                         pos=obj.position, count=15, color=color, alpha=200,
                         size_range=(4, 12), speed_range=(100, 300),
                         lifetime=0.6, gravity=400.0,
                     )
-                    # Rơi táo (mask 2)
-                    loot = Node(obj.position.copy())
-                    loot.textureName = "apple"
-                    loot.scaleMultiplier = 0.5
-                    loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2
-                    loot.lifetime = 15.0 # Táo sẽ biến mất sau 15 giây nếu không được ăn
-                    loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
+                    
+                    # RƠI ĐỒ: Bụi cây thì rơi thêm 1 ít EXP
+                    if is_bush:
+                        from stage import StageManager
+                        StageManager.get_instance().spawn_exp(obj.position, value=5)
+
+                    # Rơi táo (xác suất 25%)
+                    if random.random() < 0.25:
+                        loot = Node(obj.position.copy())
+                        loot.textureName = "apple"
+                        loot.scaleMultiplier = 0.5
+                        loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2
+                        loot.lifetime = 15.0 # Táo sẽ biến mất sau 15 giây nếu không được ăn
+                        loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
                 
                 self.on_object_broken(obj)
                 continue

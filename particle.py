@@ -113,6 +113,10 @@ class ParticleManager:
 
     def spawn(self, pos, count=8, color=(255, 220, 80), alpha=255, size_range=(4, 12), 
               speed_range=(60, 300), lifetime=0.5, gravity=250.0, spread=360, texture_name=None, use_additive=False):
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("video", "particles"):
+            return
+            
         for _ in range(count):
             angle = math.radians(random.uniform(0, spread))
             speed = random.uniform(*speed_range)
@@ -127,6 +131,10 @@ class ParticleManager:
     def spawn_directional(self, pos, direction_angle, count=6, color=(255, 255, 255), 
                           alpha=255, size_range=(3, 8), speed_range=(80, 250), 
                           spread_deg=60, lifetime=0.4, gravity=200.0, texture_name=None, use_additive=False):
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("video", "particles"):
+            return
+            
         for _ in range(count):
             angle = direction_angle + random.uniform(-spread_deg / 2, spread_deg / 2)
             rad = math.radians(angle)

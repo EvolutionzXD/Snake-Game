@@ -7,7 +7,7 @@ class ProjectileManager:
     @classmethod
     def Spawn(cls, pos, target_pos, config_func=None, speed=None, knockback_override=None, 
               stun_override=None, lifetime_override=None, damage_override=None, 
-              inherited_velocity=None, alpha_override=None):
+              inherited_velocity=None, alpha_override=None, velocity_override=None, is_enemy=False):
         from config import GetProjectileConfig
         if config_func is None:
             config_func = GetProjectileConfig
@@ -20,16 +20,28 @@ class ProjectileManager:
         
         if knockback_override is not None: proj.knockback = knockback_override
         if stun_override is not None:      proj.stun_on_hit = stun_override
-        if damage_override is not None:    proj.damage = damage_override
+        
+        # Áp dụng sát thương và nhân với damage_mult của người chơi
+        from apple import AppleManager
+        if damage_override is not None:    
+            proj.damage = damage_override
+            
+        if not is_enemy:
+            proj.damage *= AppleManager.damage_mult
+
         if lifetime_override is not None:  proj.lifetime = lifetime_override
         if alpha_override is not None:     proj.alpha = alpha_override
         
-        direction = pygame.math.Vector2(target_pos) - pygame.math.Vector2(pos)
-        if direction.length_squared() > 0:
-            proj.velocity = direction.normalize() * final_speed
-            if inherited_velocity is not None:
-                proj.velocity += inherited_velocity
-            
+        if velocity_override is not None:
+            proj.velocity = pygame.math.Vector2(velocity_override)
+        else:
+            direction = pygame.math.Vector2(target_pos) - pygame.math.Vector2(pos)
+            if direction.length_squared() > 0:
+                proj.velocity = direction.normalize() * final_speed
+                if inherited_velocity is not None:
+                    proj.velocity += inherited_velocity
+        
+        if proj.velocity.length_squared() > 0:
             proj.angle = math.degrees(math.atan2(proj.velocity.y, proj.velocity.x))
         
         if config.MaxFrame > 0:

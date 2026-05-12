@@ -17,11 +17,88 @@ class AppleManager:
     dash_cooldown = 0.0   # Thời gian hồi Dash
     DASH_DURATION = 0.5
     DASH_COOLDOWN_TIME = 0.6
+    
+    username = "Player"
+    
+    # EXP System
+    level = 1
+    exp = 0
+    max_exp = 100
+    pending_level_ups = 0
+
+    # Stat Bonuses
+    max_hp_bonus = 0.0
+    max_stamina_bonus = 0.0
+    damage_mult = 1.0
+    magnet_radius = 200.0
+
+    @classmethod
+    def load_data(cls, data):
+        cls.username = data.get("username", "Player")
+        cls.exp = data.get("exp", 0)
+        cls.level = data.get("level", 1)
+        cls.max_exp = int(100 * (1.5 ** (cls.level - 1)))
+        cls.max_hp_bonus = data.get("max_hp_bonus", 0.0)
+        cls.max_stamina_bonus = data.get("max_stamina_bonus", 0.0)
+        cls.damage_mult = data.get("damage_mult", 1.0)
+        
+        cls.max_stamina = 1000.0 + cls.max_stamina_bonus
+        cls.stamina = cls.max_stamina
+        
+        # Sẽ apply max_hp_bonus khi Spawn()
+
+    @classmethod
+    def add_exp(cls, amount):
+        cls.exp += amount
+        leveled_up = False
+        while cls.exp >= cls.max_exp:
+            cls.exp -= cls.max_exp
+            cls.level += 1
+            cls.pending_level_ups += 1
+            cls.max_exp = int(cls.max_exp * 1.5)
+            leveled_up = True
+            
+            # Spawn level up particle
+            if cls.apple_node:
+                ParticleManager.get_instance().spawn(
+                    pos=cls.apple_node.position, count=30, color=(255, 255, 50), 
+                    alpha=200, size_range=(4, 8), speed_range=(100, 300), 
+                    lifetime=0.6, gravity=-50.0
+                )
+        return leveled_up
 
     @classmethod
     def Spawn(cls, pos):
         cls.apple_node = Node(pos)
         cls.apple_node.apply_config(GetAppleConfig())
+        cls.apple_node.MaxHp += cls.max_hp_bonus
+        cls.apple_node.Hp = cls.apple_node.MaxHp
+
+    @classmethod
+    def save_stats(cls):
+        from save_system import SaveSystem
+        from stage import StageManager
+        SaveSystem.get_instance().save_game(
+            cls.username, cls.exp, cls.level, StageManager.get_instance().max_unlocked_wave,
+            cls.max_hp_bonus, cls.max_stamina_bonus, cls.damage_mult
+        )
+
+    @classmethod
+    def apply_upgrade(cls, upgrade_id):
+        if not cls.apple_node: return
+        
+        if upgrade_id == "max_hp":
+            cls.max_hp_bonus += 25.0
+            cls.apple_node.MaxHp += 25.0
+            cls.apple_node.Hp = cls.apple_node.MaxHp # Hồi máu khi nâng cấp
+        elif upgrade_id == "max_stamina":
+            cls.max_stamina_bonus += 200.0
+            cls.max_stamina += 200.0
+            cls.stamina = cls.max_stamina
+        elif upgrade_id == "damage_mult":
+            cls.damage_mult += 0.15
+        
+        cls.save_stats()
 
     @classmethod
     def Process(cls, dt):
@@ -104,6 +181,11 @@ class AppleManager:
         cls.dash_cooldown = cls.DASH_COOLDOWN_TIME
         
         ParticleManager.get_instance().spawn(pos=cls.apple_node.position, count=15, color=(255, 255, 255), alpha=150, size_range=(4, 10), speed_range=(50, 300), lifetime=0.4, gravity=0.0)
+
+    @classmethod
+    def get_all_apples(cls):
+        from entity import active_nodes
+        return [n for n in active_nodes if n.mask == 2 and not n.is_dead]
 
     @classmethod
     def GetPosition(cls):

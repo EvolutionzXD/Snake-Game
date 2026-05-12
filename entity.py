@@ -23,7 +23,7 @@ class Node:
                  'hitbox_radius', 'MaxHp', 'Hp', 'knockback', 'stun', 'invincibility', 
                  'damage', 'mask', 'maskOut', 'textureOffsetX', 'textureOffsetY', 
                  'MinFrame', 'MaxFrame', 'frame', 'textureWidth', 'textureHeight', 
-                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'alpha', 'origin_pos', 'snake_head', 'snake_depth']
+                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'trail_color', 'alpha', 'origin_pos', 'snake_head', 'snake_depth', 'knockback_resistance', 'can_be_stunned']
 
     def __init__(self, pos):
         self.position = pygame.math.Vector2(pos)
@@ -61,10 +61,13 @@ class Node:
         self.flipY = False
         self.stun_on_hit = 0.1
         self.has_trail_particles = True
+        self.trail_color = (200, 200, 200)
         self.alpha = 255
         self.origin_pos = self.position.copy()
         self.snake_head = None
         self.snake_depth = 0
+        self.knockback_resistance = 1.0
+        self.can_be_stunned = True
         active_nodes.append(self)
 
     def apply_config(self, config):
@@ -89,7 +92,10 @@ class Node:
         self.lifetime = config.lifetime
         self.stun_on_hit = config.stun_on_hit
         self.has_trail_particles = config.has_trail_particles
+        self.trail_color = getattr(config, 'trail_color', (200, 200, 200))
         self.hasShadow = config.hasShadow
+        self.knockback_resistance = getattr(config, 'knockback_resistance', 1.0)
+        self.can_be_stunned = getattr(config, 'can_be_stunned', True)
 
     def deal_damage_to(self, other, amount):
         other.Hp -= amount
@@ -119,14 +125,18 @@ class Node:
             other.flashEffect = max(other.flashEffect, duration)
 
     def apply_stun_to(self, other, duration):
-        other.stun = max(other.stun, duration)
+        if getattr(other, 'can_be_stunned', True):
+            other.stun = max(other.stun, duration)
 
     def apply_knockback_to(self, other, force):
+        resistance = getattr(other, 'knockback_resistance', 1.0)
+        actual_force = force * resistance
+        if actual_force <= 0: return
         if self.position.distance_squared_to(other.position) > 0:
             push_dir = (other.position - self.position).normalize()
         else:
             push_dir = pygame.math.Vector2(random.uniform(-1, 1), random.uniform(-1, 1)).normalize()
-        other.velocity += push_dir * force
+        other.velocity += push_dir * actual_force
 
     def get_position_id(self):
         return (int(self.position.x // CELL_SIZE), int(self.position.y // CELL_SIZE))
@@ -225,6 +235,10 @@ def process_physics_and_collisions(dt):
                         speed_range=(80, int(200 + scale * 200)),
                         lifetime=0.5 + scale * 0.3, gravity=250.0,
                     )
+                    
+                    if getattr(n, 'snake_head', None) == n:
+                        from stage import StageManager
+                        StageManager.get_instance().on_snake_killed(n.position)
         
         active_nodes[:] = [n for n in active_nodes if n.Hp > 0 and not n.is_dead]
 
@@ -249,13 +263,14 @@ def process_physics_and_collisions(dt):
         # --- HIỆU ỨNG BỤI TRƯỢT DÀI (Nhiều khói hơn) ---
         if node.has_trail_particles:
             vel_sq = node.velocity.length_squared()
+            color = node.trail_color
             if vel_sq > 640000: # Vận tốc > 800 px/s (Cực mạnh)
                 pm = ParticleManager.get_instance()
                 # Spawn nhiều hạt hơn (4 hạt mỗi frame) để tạo vệt trượt dày đặc
                 pm.spawn(
                     pos         = node.position,
                     count       = 4, 
-                    color       = (210, 200, 180), 
+                    color       = color, 
                     alpha       = 160,
                     size_range  = (4, 10),
                     speed_range = (40, 150),
@@ -268,7 +283,7 @@ def process_physics_and_collisions(dt):
                     pm.spawn(
                         pos         = node.position, 
                         count       = 2, # Tăng lên 2 hạt
-                        color       = (200, 200, 200), 
+                        color       = color, 
                         alpha       = 130, 
                         size_range  = (3, 7), 
                         speed_range = (10, 40), 
@@ -277,7 +292,7 @@ def process_physics_and_collisions(dt):
                     )
             elif vel_sq > 40000: # Thêm khói nhẹ cả khi di chuyển nhanh vừa phải (>200)
                 if random.random() < 0.3:
-                    ParticleManager.get_instance().spawn(pos=node.position, count=1, color=(220, 220, 220), alpha=80, size_range=(2, 5), speed_range=(5, 15), lifetime=0.3, gravity=-20.0)
+                    ParticleManager.get_instance().spawn(pos=node.position, count=1, color=color, alpha=80, size_range=(2, 5), speed_range=(5, 15), lifetime=0.3, gravity=-20.0)
 
         if node.invincibility > 0: node.invincibility -= dt
         if node.flashEffect > 0: node.flashEffect -= dt

@@ -5,6 +5,7 @@ from entity import Node
 from config import GetSnakeHeadConfig, GetSnakeBodyConfig
 from particle import ParticleManager
 from apple import AppleManager
+from grid import GridManager
 
 class Snake:
     def __init__(self, startPos, config):
@@ -38,6 +39,11 @@ class Snake:
             for i, node in enumerate(self.nodes):
                 node.snake_head = head_node
                 node.snake_depth = i
+        
+        self.shoot_timer = random.uniform(1.0, 3.0)
+        self.aim_timer = 0.0
+        self.aim_target_pos = None
+        self.behavior = getattr(config, 'behavior', 'melee')
 
     def GetPosition(self):
         return self.nodes[0].position if self.nodes else pygame.math.Vector2(0,0)
@@ -45,13 +51,72 @@ class Snake:
     def GetHead(self):
         return self.nodes[0] if self.nodes else None
 
-    def attract(self, target_node, Smoothing):
-        if not self.nodes or not target_node: return
+    def attract(self, target_node, Smoothing, camera=None):
+        if not self.nodes: return
         
-        # Nếu đang tấn công mục tiêu (Smoothing >= 0), áp dụng logic dự đoán đường đi
+        # Grid-based logic
+        if camera and Smoothing >= 0:
+            grid_target = GridManager.get_instance().get_best_direction(
+                self.nodes[0].position, 
+                camera, 
+                getattr(self.config, 'has_bullet_awareness', False)
+            )
+            
+            if grid_target:
+                # Nếu có grid target, ưu tiên di chuyển theo grid
+                offset = grid_target - self.nodes[0].position
+                if offset.length_squared() > 0:
+                    TargetSpeed = offset.normalize() * self.MaxVelocity
+                    self.nodes[0].direction = self.nodes[0].direction.lerp(TargetSpeed, abs(Smoothing))
+                return
+
+        # Fallback to direct attraction (for repulsion or if out of grid)
+        if not target_node: return
+        
         if Smoothing >= 0:
             target_vel = target_node.direction + target_node.velocity
             predicted_pos = target_node.position + target_vel * self.intercept_factor
+            
+            # Logic giữ khoảng cách cho Ranged Snake (Cải tiến: Thêm di chuyển ngang)
+            if self.behavior == "ranged":
+                dist = self.nodes[0].position.distance_to(target_node.position)
+                if dist < 550:
+                    # Bỏ chạy ngang (Diagonal fleeing) để né đạn tốt hơn
+                    Smoothing = 0.12 
+                    away_dir = (self.nodes[0].position - target_node.position).normalize()
+                    side_dir = pygame.math.Vector2(-away_dir.y, away_dir.x) # Hướng ngang
+                    
+                    # Kết hợp chạy ra xa + chạy ngang
+                    flee_dir = (away_dir * 0.6 + side_dir * 0.4).normalize()
+                    TargetSpeed = flee_dir * self.MaxVelocity
+                    self.nodes[0].direction = self.nodes[0].direction.lerp(TargetSpeed, abs(Smoothing))
+                    return
+                elif dist < 850:
+                    # Kiting: Di chuyển ngang (Sidewinding) để tránh bị kẹt
+                    Smoothing = 0.05 
+                    to_target = target_node.position - self.nodes[0].position
+                    if to_target.length_squared() > 0:
+                        side_dir = pygame.math.Vector2(-to_target.y, to_target.x).normalize()
+                        # Thêm một chút hướng về mục tiêu để không bị trôi quá xa
+                        TargetSpeed = (side_dir * 0.8 + to_target.normalize() * 0.2) * self.MaxVelocity
+                        self.nodes[0].direction = self.nodes[0].direction.lerp(TargetSpeed, abs(Smoothing))
+                        return
+            
+            # Logic cho Sniper Snake: Giữ khoảng cách tầm trung và đứng yên khi ngắm
+            elif self.behavior == "sniper":
+                if self.aim_timer > 0:
+                    # Đang ngắm: Đứng yên
+                    self.nodes[0].velocity *= 0.9 # Giảm tốc dần về 0
+                    self.nodes[0].direction *= 0.9
+                    return
+                
+                dist = self.nodes[0].position.distance_to(target_node.position)
+                if dist < 500:
+                    Smoothing = -0.1 # Lùi lại nếu quá gần
+                elif dist > 800:
+                    Smoothing = 0.05 # Tiến lại gần nếu quá xa
+                else:
+                    Smoothing = 0 # Đứng im ở tầm lý tưởng
         else:
             predicted_pos = target_node.position
             
@@ -71,10 +136,114 @@ class Snake:
 
         self._update_intercept_factor(dt)
         self._handle_outscreen_teleport()
+        if not self.nodes: return
+        
         self._handle_death_propagation(dt)
         self._update_movement(dt)
         self._update_body_trailing(dt)
+        self._update_broken_frames(dt)
         self._emit_particles(dt)
+        self._handle_ranged_attack(dt)
+
+    def _handle_ranged_attack(self, dt):
+        if self.behavior not in ["ranged", "sniper"]: return
+        if not self.nodes or self.nodes[0].Hp <= 0: return
+        
+        player_pos = AppleManager.GetPosition()
+        dist = self.nodes[0].position.distance_to(player_pos)
+        
+        # Sniper Logic: Ngắm bắn trước khi khai hỏa
+        if self.behavior == "sniper":
+            if self.shoot_timer <= 1.5 and self.aim_timer <= 0:
+                # Bắt đầu ngắm
+                self.aim_timer = 1.5
+            
+            if self.aim_timer > 0:
+                self.aim_timer -= dt
+                
+                # Cảnh báo nhấp nháy trên đầu rắn
+                if self.aim_timer < 0.4:
+                    self.nodes[0].flashEffect = 0.1 # Nháy liên tục
+                
+                # Cập nhật vị trí dự đoán liên tục khi đang ngắm (để vẽ laze)
+                player_node = AppleManager.apple_node
+                if player_node:
+                    # Dự đoán cực nhẹ (gần như nhắm thẳng) để nhìn tự nhiên hơn
+                    player_vel = player_node.direction + player_node.velocity
+                    self.aim_target_pos = player_pos + player_vel * (random.uniform(0, 1) / 100) 
+                else:
+                    self.aim_target_pos = player_pos
+
+                # Khi hết thời gian ngắm -> Khai hỏa
+                if self.aim_timer <= 0:
+                    from projectile import ProjectileManager
+                    from config import GetProjectileConfig
+                    
+                    def SniperBulletConfig():
+                        cfg = GetProjectileConfig()
+                        cfg.lifetime = 0.8
+                        cfg.textureName = "sniper_projectile"
+                        cfg.damage = getattr(self.config, 'ranged_damage', 50.0)
+                        cfg.mask = 4 
+                        cfg.maskOut = [2, 5]
+                        cfg.scaleMultiplier = 0.2
+                        cfg.hasShadow = True
+                        cfg.hasOutline = False
+                        cfg.has_trail_particles = True
+                        cfg.trail_color = (255, 150, 0) # Màu cam rực rỡ cho Sniper
+                        return cfg
+                    
+                    # Tính toán vận tốc chủ động (không phụ thuộc vào vận tốc của rắn)
+                    direction = (self.aim_target_pos - self.nodes[0].position)
+                    if direction.length_squared() > 0:
+                        active_velocity = direction.normalize() * 4000.0
+                    else:
+                        active_velocity = pygame.math.Vector2(0, 0)
+
+                    ProjectileManager.Spawn(
+                        pos = self.nodes[0].position,
+                        target_pos = self.aim_target_pos,
+                        config_func = SniperBulletConfig,
+                        lifetime_override = 1.0,
+                        velocity_override = active_velocity,
+                        is_enemy = True
+                    )
+                    self.shoot_timer = getattr(self.config, 'shoot_interval', 4.0) + random.uniform(-0.5, 0.5)
+            else:
+                self.shoot_timer -= dt
+            return
+
+        # Ranged (Venom) Logic: Bắn liên tục
+        self.shoot_timer -= dt
+        if self.shoot_timer <= 0:
+            if dist < 800:
+                from projectile import ProjectileManager
+                from config import GetProjectileConfig
+                
+                # Bắn một viên đạn của quái (có thể tùy chỉnh config riêng sau)
+                def EnemyBulletConfig():
+                    cfg = GetProjectileConfig()
+                    cfg.textureName = "venom_projectile"
+                    cfg.damage = getattr(self.config, 'ranged_damage', 10.0)
+                    cfg.mask = 4 # Coi như đạn kẻ thù (va chạm với Apple)
+                    cfg.maskOut = [2, 5] # Va chạm với Apple (2) và Bush (5)
+                    cfg.scaleMultiplier = 0.2
+                    cfg.hasShadow = True
+                    cfg.hasOutline = False
+                    cfg.has_trail_particles = True
+                    cfg.trail_color = (0, 255, 0)
+                    return cfg
+                
+                ProjectileManager.Spawn(
+                    pos = self.nodes[0].position,
+                    target_pos = player_pos,
+                    config_func = EnemyBulletConfig,
+                    speed = 1200.0,
+                    lifetime_override = 1.5,
+                    inherited_velocity = self.nodes[0].velocity + self.nodes[0].direction,
+                    is_enemy = True
+                )
+                self.shoot_timer = getattr(self.config, 'shoot_interval', 2.0) + random.uniform(-0.1, 0.1)
 
     def _update_intercept_factor(self, dt):
         self.intercept_timer -= dt
@@ -88,7 +257,15 @@ class Snake:
         head = self.nodes[0]
         dist_sq = head.position.distance_squared_to(player_pos)
         
-        if dist_sq > 1000 * 1000:
+        if dist_sq > 1200 * 1200:
+            # Nếu đầu rắn đã chết mà còn ở xa thì dọn dẹp sạch sẽ các node
+            if head.Hp <= 0:
+                for node in self.nodes:
+                    node.Hp = 0
+                    node.is_dead = True # Đánh dấu chết để entity.py tự dọn dẹp
+                self.nodes.clear()
+                return
+                
             player_node = AppleManager.apple_node
             if player_node and (player_node.direction.length_squared() > 10 or player_node.velocity.length_squared() > 10):
                 player_vel = player_node.direction + player_node.velocity
@@ -126,6 +303,9 @@ class Snake:
         
         for i in range(1, len(self.nodes)):
             curr, prev = self.nodes[i], self.nodes[i-1]
+            if prev.Hp <= 0 or curr.Hp <= 0:
+                continue
+                
             desired_dist = self.BodyLength * self.scale_logic * curr.scaleMultiplier
             offset = curr.position - prev.position
             dist = offset.length()
@@ -140,6 +320,42 @@ class Snake:
             if dist < desired_dist * 0.8 and dist > 0:
                 push_dir = offset / dist
                 curr.velocity += push_dir * push_force * dt
+
+    def _update_broken_frames(self, dt):
+        broken_count = 0
+        for i, node in enumerate(self.nodes):
+            if getattr(node, 'textureName', '') == 'snake_stone':
+                if 0 < node.Hp <= node.MaxHp * 0.5:
+                    broken_count += 1
+                    if i == 0:
+                        node.MinFrame = 2
+                        node.MaxFrame = 2
+                    else:
+                        node.MinFrame = 3
+                        node.MaxFrame = 3
+                        
+                    # Twitching (Giật mạnh hơn khi sắp vỡ)
+                    node.position.x += random.uniform(-2.5, 2.5)
+                    node.position.y += random.uniform(-2.5, 2.5)
+                    
+                    # Nhả khói (Smoke particles - NHIỀU HƠN)
+                    if random.random() < 0.4: # 40% cơ hội mỗi frame nhả khói
+                        pm = ParticleManager.get_instance()
+                        pm.spawn(
+                            pos         = node.position + pygame.math.Vector2(random.uniform(-15, 15), random.uniform(-15, 15)),
+                            count       = random.randint(2, 4), # Sinh ra 2-4 hạt cùng lúc
+                            color       = (100, 100, 100), 
+                            alpha       = 180,
+                            size_range  = (4, 10),
+                            speed_range = (10, 30),
+                            lifetime    = random.uniform(0.4, 0.8),
+                            gravity     = -40.0 
+                        )
+        
+        # Nếu là rắn đá, càng vỡ nhiều phần thì càng nhẹ và chạy càng nhanh
+        if getattr(self.config.headConfig, 'textureName', '') == 'snake_stone':
+            base_vel = getattr(self.config, 'velocity', 300.0)
+            self.MaxVelocity = base_vel + (broken_count * 30.0)
 
     def _emit_particles(self, dt):
         head = self.nodes[0]

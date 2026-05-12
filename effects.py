@@ -15,6 +15,9 @@ class CameraShake:
         self.trauma = 0.0
         
     def add_trauma(self, amount):
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("video", "screen_shake"):
+            return
         self.trauma = min(max(self.trauma, amount), 1.0)
         
     def update(self, dt):
@@ -95,6 +98,9 @@ class EffectManager:
         self.hitstop_timer = 0.0 # Thời gian khựng hình
         
     def add_damage_number(self, pos, amount, color=(255, 255, 10), size=30):
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("gameplay", "show_damage_numbers"):
+            return
         self.damage_numbers.append(DamageNumber(pos, amount, color, size))
         
     def trigger_hitstop(self, duration):

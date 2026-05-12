@@ -509,8 +509,8 @@ class WeaponManager:
         self.weapons = {
             "Pistol": Gun("Pistol", GetProjectileConfig, texture_name="pistol", fire_rate=0.4, speed=4000.0, arm_len=5, stick_len=30, scale=2, stamina_cost=0.0),
             "SMG": Gun("SMG", GetProjectileConfig, texture_name="stick", is_automatic=True, fire_rate=0.08, speed=1500.0, arm_len=2, stick_len=25, recoil=10, scale=1.2, stamina_cost=1.5),
-            "FlameThrower": Flamethrower("FlameThrower", GetFlameConfig, texture_name="flame_thrower", fire_rate=0.03, speed=900.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
             "AirSword": Sword("AirSword", GetSwordAirDashConfig, texture_name="stick", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=20.0),
+            "FlameThrower": Flamethrower("FlameThrower", GetFlameConfig, texture_name="flame_thrower", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
             "StarPlatinum": StandWeapon("StarPlatinum", GetGhostPunchConfig, texture_name="stick", fire_rate=0.04, speed=0.0, arm_len=0, stick_len=0, recoil=0, scale=0.8, stamina_cost=2.0),
             "FlameExtinguisher": FlameExtinguisher("FlameExtinguisher", GetFoamConfig, texture_name="fire_extinquisher", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
             "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="stick", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0)
@@ -523,10 +523,21 @@ class WeaponManager:
 
     def switch_weapon(self, name):
         if name in self.weapons:
+            if self.active_weapon == self.weapons[name]: return # Tránh reset nếu là cùng 1 vũ khí
             self.active_weapon.on_unequip()
             if hasattr(self.active_weapon, "is_charging"):
                 self.active_weapon.is_charging = False
             self.active_weapon = self.weapons[name]
+
+    def cycle_weapon(self, direction):
+        # Lấy danh sách tên vũ khí theo thứ tự đã định nghĩa
+        names = list(self.weapons.keys())
+        current_name = self.active_weapon.name
+        if current_name in names:
+            current_index = names.index(current_name)
+            # direction > 0: Next, direction < 0: Previous
+            new_index = (current_index + direction) % len(names)
+            self.switch_weapon(names[new_index])
 
     def attack(self, pos, target_pos, is_holding=False):
         self.last_player_pos = pos
