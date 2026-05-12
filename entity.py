@@ -238,7 +238,7 @@ def process_physics_and_collisions(dt):
                     
                     if getattr(n, 'snake_head', None) == n:
                         from stage import StageManager
-                        StageManager.get_instance().on_snake_killed(n.position)
+                        StageManager.get_instance().on_snake_killed(n.position, n.MaxHp)
         
         active_nodes[:] = [n for n in active_nodes if n.Hp > 0 and not n.is_dead]
 

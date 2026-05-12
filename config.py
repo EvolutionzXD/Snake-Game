@@ -54,10 +54,10 @@ def GetSlashConfig():
 
 # --- ENVIRONMENTAL CONFIGS ---
 def GetRockConfig():
-    return NodeConfig(textureName="rock", mask=5, maskOut=[1, 2, 3], hitbox_radius=26.0, MaxHp=50.0, knockback=500.0, damage=0.01, scaleMultiplier=1.2, hasShadow=True, canShakeCamera = False, stun_on_hit=False, canApplyFlash=False, has_trail_particles=False)
+    return NodeConfig(textureName="rock", mask=5, maskOut=[1, 2, 3], hitbox_radius=26.0, MaxHp=500.0, knockback=500.0, damage=0.01, MaxFrame=3, scaleMultiplier=1.2, hasShadow=True, canShakeCamera = False, stun_on_hit=False, canApplyFlash=False, has_trail_particles=False, hasOutline=True, knockback_resistance=0.01)
 
 def GetTreeConfig():
-    return NodeConfig(textureName="bush", mask=5, maskOut=[1, 2, 3], hitbox_radius=20.0, MaxHp=20.0, knockback=300.0, damage=0.0, scaleMultiplier=0.8, hasShadow=True, canShakeCamera = False, stun_on_hit=False, canApplyFlash=False, has_trail_particles=False)
+    return NodeConfig(textureName="bush", mask=5, maskOut=[1, 2, 3], hitbox_radius=20.0, MaxHp=20.0, knockback=300.0, damage=0.01, MaxFrame=2, scaleMultiplier=0.8, hasShadow=True, canShakeCamera = False, stun_on_hit=False, canApplyFlash=False, has_trail_particles=False, hasOutline=True)
 # --- STAND CONFIGS ---
 def GetGhostPunchConfig():
     return NodeConfig(
@@ -160,23 +160,27 @@ def GetSniperSnakeConfig():
 # max_on_screen: Số lượng rắn tối đa xuất hiện cùng lúc trên map
 WAVES_DATA = [    
     
-    {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 80, 20], "flags": [0.5], "max_on_screen": 3},
-    {"total": 10, "difficulty": 1.2, "weights": [60, 20, 0, 0, 20, 0], "flags": [0.5, 0.9], "max_on_screen": 3},
-    {"total": 20, "difficulty": 1.2, "weights": [40, 20, 10, 0, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 10},
-    {"total": 5, "difficulty": 1, "weights": [30, 20, 50, 0 ,0 ,0 ], "flags": [0.3, 0.6, 0.9], "max_on_screen": 2},
-    {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.5], "max_on_screen": 1},
-    {"total": 10, "difficulty": 1.2, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 3},
-    {"total": 5, "difficulty": 1.2, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
-    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 80, 0, 20], "flags": [0.5, 0.8], "max_on_screen": 10},
-
-    {"total": 20, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
+    {"total": 5, "difficulty": 1.0, "weights": [80, 10, 10, 0, 0, 0], "flags": [0.5], "max_on_screen": 1},
+    {"total": 10, "difficulty": 1.0, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 2},
+    {"total": 12, "difficulty": 1.0, "weights": [40, 30, 20, 10, 0, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 1},
+    {"total": 6, "difficulty": 1.0, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.8], "max_on_screen": 5},
+    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 0 ,0 ,100 ], "flags": [0.3, 0.6, 0.9], "max_on_screen": 2},
+    
+    {"total": 15, "difficulty": 1.0, "weights": [60, 20, 10, 0, 10, 0], "flags": [0.5], "max_on_screen": 1},
     {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.5], "max_on_screen": 3},
-    {"total": 10, "difficulty": 1.2, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 3},
-    {"total": 5, "difficulty": 1.2, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
-    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 80, 0, 20], "flags": [0.5, 0.8], "max_on_screen": 10},
+    {"total": 30, "difficulty": 1.2, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
+    {"total": 20, "difficulty": 1.2, "weights": [0, 0, 0, 0, 100, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 3},
+    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 70, 10, 20], "flags": [0.5, 0.8], "max_on_screen": 6},
+    
+    {"total": 20, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
+    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
+    {"total": 5, "difficulty":  5.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.3, 0.6, 0.9], "max_on_screen": 1},
+    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 80, 0, 20], "flags": [0.5, 0.8], "max_on_screen": 4},
     {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 80, 20], "flags": [0.5], "max_on_screen": 3},
-    {"total": 10, "difficulty": 1.2, "weights": [60, 20, 0, 0, 20, 0], "flags": [0.5, 0.9], "max_on_screen": 3},
-    {"total": 20, "difficulty": 1.2, "weights": [40, 20, 10, 0, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
+    
+    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 4},
+    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 6},
+    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 8},
     {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 10},
+    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 12},
 ]

@@ -149,10 +149,16 @@ class GridManager:
 
         # Trả về target nếu tìm được đường đi (score không phải vô hạn)
         if found and best_score < 1000000:
+            # Nếu điểm tốt nhất là ô hiện tại (không có ô nào xung quanh tốt hơn)
+            # Trả về None để răn dùng logic "đuổi trực diện" (tránh bị kẹt/đứng im)
+            if best_target_gx == gx and best_target_gy == gy:
+                return None
+                
             # Nếu điểm tốt nhất là 0 (đã chạm vào Táo), trả về None 
             # để Snake quay lại logic "đuổi trực diện" thay vì đi vào tâm ô lưới
             if best_score == 0:
                 return None
+                
             return self.grid_to_world(best_target_gx, best_target_gy, camera)
         return None
 

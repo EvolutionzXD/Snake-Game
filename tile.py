@@ -26,7 +26,7 @@ def get_terrain_type(grid_x, grid_y):
                               lacunarity=2.0)
     
     # Giá trị noise thường nằm trong khoảng -1.0 -> 1.0
-    if noise_val > 0.3:  # Tăng ngưỡng lên để Cỏ (grass) chiếm phần lớn diện tích
+    if noise_val > 0.1:  # Giảm ngưỡng để Biome Đá xuất hiện nhiều hơn
         tex = "stone"
     else:
         tex = "grass"
@@ -55,7 +55,7 @@ class EnvironmentalManager:
         # Ngưỡng vật thể (Hạ thấp ngưỡng của grass để ra nhiều bụi cỏ hơn)
         if terrain_type == "grass" and val > 0.2: # Nhiều bush hơn
             return "tree" # "tree" thực chất là bush trong config
-        elif terrain_type == "stone" and val > 0.35: # Giữ nguyên độ hiếm của đá
+        elif terrain_type == "stone" and val > 0.4: # Tăng ngưỡng lên 0.6 để đá mọc rất ít
             return "rock"
             
         return None
@@ -84,8 +84,36 @@ class EnvironmentalManager:
         obj = Node(pos)
         if obj_type == "rock":
             obj.apply_config(GetRockConfig())
+            
+            # Kích thước đá đa dạng
+            hash_scale = ((gx * 41 + gy * 89) % 40) / 100.0 # Sinh ra từ 0.0 đến 0.39
+            obj.scaleMultiplier = 1.0 + hash_scale # Kích thước từ 1.0 đến 1.39
+            
+            # Khởi tạo offset để gốc hòn đá bám sát đất
+            obj.textureOffsetY = -(32 * obj.scaleMultiplier / 2.0) + 2.8
+
+            # Chọn Frame cho Đá (Easter Egg siêu hiếm ở Frame 3)
+            rock_hash = (gx * 97 + gy * 43) % 100
+            if rock_hash < 2: # Tỉ lệ 2% ra Easter Egg
+                rock_frame = 3
+            else:
+                rock_frame = rock_hash % 3 # Tỉ lệ 98% chia đều cho 3 frame đầu
+            
+            obj.MinFrame = rock_frame
+            obj.MaxFrame = rock_frame
         else:
             obj.apply_config(GetTreeConfig())
+            # Hash tọa độ để chọn frame cố định (0, 1, hoặc 2) cho từng bụi cây
+            bush_frame = (gx * 31 + gy * 17) % 3
+            obj.MinFrame = bush_frame
+            obj.MaxFrame = bush_frame
+            
+            # Kích thước (Scale) đa dạng dựa trên hash để tránh trùng lặp
+            hash_scale = ((gx * 73 + gy * 37) % 30) / 100.0 # Sinh ra từ 0.0 đến 0.29
+            obj.scaleMultiplier = 0.65 + hash_scale # Kích thước từ 0.65 đến 0.94
+            
+            # Khởi tạo offset (sẽ được cập nhật liên tục trong process)
+            obj.textureOffsetY = -(32 * obj.scaleMultiplier / 2.0) + 2.8
         
         # Đăng ký quản lý
         self.spawned_entities[(gx, gy)] = obj
@@ -134,19 +162,25 @@ class EnvironmentalManager:
                         lifetime=0.6, gravity=400.0,
                     )
                     
-                    # RƠI ĐỒ: Bụi cây thì rơi thêm 1 ít EXP
+                    # RƠI ĐỒ: Chỉ áp dụng cho bụi cây
                     if is_bush:
                         from stage import StageManager
                         StageManager.get_instance().spawn_exp(obj.position, value=5)
 
-                    # Rơi táo (xác suất 25%)
-                    if random.random() < 0.25:
-                        loot = Node(obj.position.copy())
-                        loot.textureName = "apple"
-                        loot.scaleMultiplier = 0.5
-                        loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2
-                        loot.lifetime = 15.0 # Táo sẽ biến mất sau 15 giây nếu không được ăn
-                        loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
+                        # Rơi Apple Coin (xác suất 25%) - Dùng làm tiền tệ
+                        if random.random() < 0.25:
+                            StageManager.get_instance().spawn_coin(obj.position, value=1)
+                            
+                        # ĐỒNG THỜI rơi Táo vật lý (xác suất 25%) - Dùng làm mồi nhử đánh lạc hướng rắn
+                        if random.random() < 0.25:
+                            loot = Node(obj.position.copy())
+                            loot.textureName = "apple"
+                            loot.scaleMultiplier = 0.5
+                            loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2 # mask 2 giúp nó được nhận diện như Player
+                            loot.lifetime = 15.0 # Mồi nhử sẽ tự hỏng sau 15 giây
+                            loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
+                            from entity import active_nodes
+                            active_nodes.append(loot)
                 
                 self.on_object_broken(obj)
                 continue
@@ -155,6 +189,17 @@ class EnvironmentalManager:
             dist_sq = obj.position.distance_squared_to(obj.origin_pos)
             if dist_sq > 0.1:
                 obj.position = obj.position.lerp(obj.origin_pos, min(8.0 * dt, 1.0))
+
+            # --- HIỆU ỨNG SIN CHO BỤI CÂY (Nhún nhảy bằng Offset) ---
+            if obj.textureName == "bush":
+                # Pha dao động khác nhau xa nhau dựa trên cả X và Y
+                phase_offset = (obj.origin_pos.x * 0.07) + (obj.origin_pos.y * 0.11)
+                t = pygame.time.get_ticks() / 1000.0 + phase_offset
+                
+                # Tính toán lại tâm gốc của hình ảnh (Base Y) dựa trên kích thước hiện tại
+                base_y = -(32 * obj.scaleMultiplier / 2.0) + 2.8
+                # Đung đưa quanh vị trí gốc
+                obj.textureOffsetY = base_y + math.sin(t * 1.5) * 1.5
 
 class Tile(Node):
     def __init__(self, pos):
@@ -192,6 +237,19 @@ class Tile(Node):
                 self.borders.append(2)
             if get_terrain_type(grid_x + 1, grid_y)[0] == "stone":
                 self.borders.append(3)
+
+        # --- SINH CỎ TRANG TRÍ (DECORATION) ---
+        seed = (grid_x * 73856093) ^ (grid_y * 19349663)
+        self.grass_data = []
+        if tex == "grass" and (seed % 10) < 4: # Chỉ 40% ô cỏ có mọc cỏ trang trí
+            count = (seed // 7) % 3 + 1 # 1 đến 3 bụi
+            for i in range(count):
+                # Tạo seed con cho từng bụi cỏ
+                sub_seed = (seed ^ (i * 1234567))
+                rx = (sub_seed % 50) - 25 # Offset rộng hơn chút
+                ry = ((sub_seed // 100) % 50) - 25
+                f_idx = (sub_seed // 1000) % 5 # Đã có 5 frame
+                self.grass_data.append((rx, ry, f_idx))
 
         # --- SINH VẬT THỂ TĨNH ---
         mgr = EnvironmentalManager.get_instance()
@@ -244,6 +302,16 @@ class Tile(Node):
             
         # Vẽ base tile (cỏ/đá tĩnh)
         super().draw_sprite(screen, camera)
+
+        # --- VẼ CỎ TRANG TRÍ ---
+        if hasattr(self, 'grass_data') and self.grass_data:
+            for rx, ry, f_idx in self.grass_data:
+                _, grass_surf = get_surfaces("small_grass", f_idx, 4.0, self.scaleMultiplier, 0.0, 0.0, False)
+                if grass_surf:
+                    # Tính toán vị trí vẽ cỏ (có offset so với tâm tile)
+                    g_pos = draw_pos + pygame.math.Vector2(rx, ry) * GLOBAL_SCALE
+                    rect = grass_surf.get_rect(center=(g_pos.x, g_pos.y))
+                    screen.blit(grass_surf, rect)
         
         # Load và vẽ viền lấn (autotile border) lên trên
         if hasattr(self, 'borders') and self.borders:

@@ -1,20 +1,28 @@
-                        laze_alpha = 0 # Tắt tạm thời
-                
-                laze_surf = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-                pygame.draw.line(laze_surf, (255, 0, 0, laze_alpha), screen_start, screen_target, 3)
-                self.screen.blit(laze_surf, (0, 0))
+        super().__init__(name, config_func, **kwargs)
+        self.swing_progress = 0.0
+        self.sword_spawns_done = 0
+        self.charge_values = {"kb": 0, "stun": 0, "dmg": 0}
 
-        def get_render_priority(node):
-            # Các layer đặc biệt luôn nằm trên cùng
-            if node.textureName == "projectile":  return 2000000
-            if node.textureName == "sword air dash": return 2100000
-            if node is apple_node_ref: return node.position.y + 100000 # Táo (Player) luôn ưu tiên cao hơn chút trong cùng mức Y
-            
-            # Lấy Y gốc
-            if node.snake_head:
-                return node.snake_head.position.y - (node.snake_depth * 0.01)
+    def attack(self, manager, pos, target_pos, is_holding):
+        current_time = time.time()
+        
+        if is_holding:
+            if not self.is_charging and current_time - self.last_fire_time >= self.fire_rate:
+                # Ngăn gồng kiếm nếu không còn thể lực
+                if AppleManager.stamina < self.stamina_cost: return False
                 
-            return node.position.y
-
-        render_nodes = sorted(
-            (n for n in active_nodes if n.mask != -1),
+                self.is_charging = True
+                self.charge_start_time = current_time 
+                self.swing_progress = 1.0 
+                self.sword_spawns_done = 0
+            return False
+        else:
+            if self.is_charging:
+                charge_dur = current_time - self.charge_start_time
+                self.charge_values["kb"] = min(400 + (charge_dur * 2300), 3000)
+                self.charge_values["stun"] = min(0.5 + (charge_dur * 0.5), 1.5)
+                self.charge_values["dmg"] = min(10 + (charge_dur * 30), 90)
+                self.is_charging = False
+                self.last_fire_time = current_time
+                self.swing_progress = 0.89 
+                

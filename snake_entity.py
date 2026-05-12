@@ -338,12 +338,12 @@ class Snake:
                     node.position.x += random.uniform(-2.5, 2.5)
                     node.position.y += random.uniform(-2.5, 2.5)
                     
-                    # Nhả khói (Smoke particles - NHIỀU HƠN)
-                    if random.random() < 0.4: # 40% cơ hội mỗi frame nhả khói
+                    # Nhả khói (Smoke particles) - Đã giảm để tối ưu hiệu năng
+                    if random.random() < 0.3: # 5% cơ hội mỗi frame
                         pm = ParticleManager.get_instance()
                         pm.spawn(
                             pos         = node.position + pygame.math.Vector2(random.uniform(-15, 15), random.uniform(-15, 15)),
-                            count       = random.randint(2, 4), # Sinh ra 2-4 hạt cùng lúc
+                            count       = random.randint(1, 2), # Sinh ra 1-2 hạt
                             color       = (100, 100, 100), 
                             alpha       = 180,
                             size_range  = (4, 10),

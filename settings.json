@@ -1,8 +1,8 @@
 {
     "video": {
         "show_fps": true,
-        "show_hitbox": true,
-        "show_grid": false,
+        "show_hitbox": false,
+        "show_grid": true,
         "screen_shake": true,
         "particles": true
     },

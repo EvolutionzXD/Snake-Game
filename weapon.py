@@ -513,7 +513,7 @@ class WeaponManager:
             "FlameThrower": Flamethrower("FlameThrower", GetFlameConfig, texture_name="flame_thrower", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
             "StarPlatinum": StandWeapon("StarPlatinum", GetGhostPunchConfig, texture_name="stick", fire_rate=0.04, speed=0.0, arm_len=0, stick_len=0, recoil=0, scale=0.8, stamina_cost=2.0),
             "FlameExtinguisher": FlameExtinguisher("FlameExtinguisher", GetFoamConfig, texture_name="fire_extinquisher", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
-            "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="stick", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0)
+            "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="RealitySlash", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0)
         }
         self.active_weapon = self.weapons["Pistol"]
         self.angle = 0 

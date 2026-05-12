@@ -52,6 +52,51 @@ class ExpOrb:
         pygame.draw.circle(screen, (50, 255, 150), (int(draw_pos.x), int(draw_pos.y)), 6 * GLOBAL_SCALE)
         pygame.draw.circle(screen, (200, 255, 220), (int(draw_pos.x), int(draw_pos.y)), 3 * GLOBAL_SCALE)
 
+class CoinOrb:
+    def __init__(self, pos, value=1):
+        self.position = pygame.math.Vector2(pos)
+        self.value = value
+        self.speed = 0.0
+        self.velocity = pygame.math.Vector2(0, 0)
+        
+        # Bắn tung ra ngẫu nhiên
+        angle = random.uniform(0, 2 * math.pi)
+        self.velocity = pygame.math.Vector2(math.cos(angle), math.sin(angle)) * random.uniform(150, 300)
+        self.timer = 0.0
+        
+    def process(self, dt):
+        self.timer += dt
+        player_pos = AppleManager.GetPosition()
+        dist_sq = self.position.distance_squared_to(player_pos)
+        
+        from settings import SettingsManager
+        is_auto_collect = SettingsManager.get_instance().get("gameplay", "auto_collect_exp")
+        
+        magnet_dist = AppleManager.magnet_radius
+        if dist_sq < magnet_dist * magnet_dist or (self.timer > 1.0 and is_auto_collect): 
+            self.speed += 1500 * dt
+            target_dir = (player_pos - self.position).normalize() if dist_sq > 0 else pygame.math.Vector2(0, 0)
+            self.velocity = self.velocity.lerp(target_dir * self.speed, 0.2)
+        else:
+            self.velocity *= 0.9 
+            
+        self.position += self.velocity * dt
+        
+        if dist_sq < 40 * 40: 
+            AppleManager.add_coin(self.value)
+            return True
+        return False
+        
+    def draw(self, screen, camera):
+        from config import GLOBAL_SCALE
+        from entity import _SCREEN_CENTER
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER
+        
+        # Vẽ Coin (Màu vàng rực)
+        pygame.draw.circle(screen, (255, 215, 0), (int(draw_pos.x), int(draw_pos.y)), 6 * GLOBAL_SCALE)
+        pygame.draw.circle(screen, (255, 255, 100), (int(draw_pos.x), int(draw_pos.y)), 3 * GLOBAL_SCALE)
+
 class StageManager:
     _instance = None
     
@@ -63,11 +108,10 @@ class StageManager:
     def __init__(self):
         self.max_unlocked_wave = 1
         self.start_wave = 1
-        # OOP: Khởi tạo đối tượng ProgressBar cho Wave (Dời xuống dưới và kéo dài)
         from GUI import ProgressBar
         bar_w, bar_h = 750, 26
         bar_x = (1200 - bar_w) // 2
-        bar_y = 800 - bar_h - 25 # Cách đáy màn hình 25px
+        bar_y = 800 - bar_h - 25
         self.progress_bar_obj = ProgressBar(
             (bar_x, bar_y, bar_w, bar_h),
             color=(0, 100, 200),        
@@ -83,10 +127,10 @@ class StageManager:
     def reset(self):
         import config
         self.exp_orbs = []
+        self.coin_orbs = []
         self.killed_snakes = 0
         self.current_wave = self.start_wave
         
-        # Lấy dữ liệu từ config
         self.waves = config.WAVES_DATA
         
         self.spawned_snakes = 0
@@ -98,13 +142,14 @@ class StageManager:
         self.progress_bar_obj.last_ratio = 0.0
 
     def spawn_exp(self, pos, value=10):
-        """Hàm dùng chung để rơi EXP từ bất kỳ nguồn nào"""
-        self.exp_orbs.append(ExpOrb(pos, value=value))
+        self.exp_orbs.append(ExpOrb(pos, value))
 
-    def on_snake_killed(self, pos):
-        # Rơi EXP khi rắn chết
-        config = self.get_current_wave_config()
-        exp_value = 10 * config["difficulty"]
+    def spawn_coin(self, pos, value=1):
+        self.coin_orbs.append(CoinOrb(pos, value))
+
+    def on_snake_killed(self, pos, max_hp):
+        # Rơi EXP tỉ lệ với máu của quái (10% MaxHp)
+        exp_value = max_hp * 0.1
         self.spawn_exp(pos, value=int(exp_value))
         
         self.killed_snakes += 1
@@ -130,17 +175,26 @@ class StageManager:
         from apple import AppleManager
         SaveSystem.get_instance().save_game(
             AppleManager.username, AppleManager.exp, AppleManager.level, self.max_unlocked_wave,
-            AppleManager.max_hp_bonus, AppleManager.max_stamina_bonus, AppleManager.damage_mult
+            AppleManager.hp_lvl, AppleManager.stamina_lvl, AppleManager.dmg_lvl, AppleManager.coins
         )
         
     def process_and_draw(self, dt, screen, camera):
-        alive_orbs = []
+        alive_exp = []
         for orb in self.exp_orbs:
             if not orb.process(dt):
-                alive_orbs.append(orb)
-        self.exp_orbs = alive_orbs
+                alive_exp.append(orb)
+        self.exp_orbs = alive_exp
         
         for orb in self.exp_orbs:
+            orb.draw(screen, camera)
+
+        alive_coins = []
+        for orb in self.coin_orbs:
+            if not orb.process(dt):
+                alive_coins.append(orb)
+        self.coin_orbs = alive_coins
+        
+        for orb in self.coin_orbs:
             orb.draw(screen, camera)
             
     def get_current_wave_config(self):

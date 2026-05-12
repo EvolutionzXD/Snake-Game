@@ -1,7 +1,16 @@
 import pygame
 import os
+import sys
 from config import GLOBAL_SCALE
 
+def resource_path(relative_path):
+    """ Lấy đường dẫn tuyệt đối đến tài nguyên, dùng cho cả dev và khi đóng gói .exe """
+    try:
+        # PyInstaller tạo ra một thư mục tạm và lưu đường dẫn trong _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class ResourceManager:
     _instance = None
@@ -15,21 +24,23 @@ class ResourceManager:
         self.fonts = {} # path -> {size -> Font}
 
     def load_all_sprites(self, directory):
-        if not os.path.exists(directory): return
-        for file in os.listdir(directory):
+        full_dir = resource_path(directory)
+        if not os.path.exists(full_dir): return
+        for file in os.listdir(full_dir):
             if file.endswith((".png", ".jpg", ".bmp")):
                 name = os.path.splitext(file)[0]
-                path = os.path.join(directory, file)
+                path = os.path.join(full_dir, file)
                 try:
                     self.textures[name] = pygame.image.load(path).convert_alpha()
                 except: continue
 
     def load_all_fonts(self, directory):
-        if not os.path.exists(directory): return
-        for file in os.listdir(directory):
+        full_dir = resource_path(directory)
+        if not os.path.exists(full_dir): return
+        for file in os.listdir(full_dir):
             if file.endswith((".ttf", ".otf")):
                 name = os.path.splitext(file)[0]
-                path = os.path.join(directory, file)
+                path = os.path.join(full_dir, file)
                 self.fonts[name] = path
 
     def get_texture(self, name):

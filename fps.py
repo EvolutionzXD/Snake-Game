@@ -18,17 +18,18 @@ class FPSCounter:
         snake_text = self.font.render(f"Snakes: {snake_count}", True, (255, 100, 100))
         static_text = self.font.render(f"Static: {static_count}", True, (0, 200, 255))
         
-        screen_w = screen.get_width()
+        screen_w, screen_h = screen.get_size()
         
-        fps_rect = fps_text.get_rect(topright=(screen_w - 15, 10))
-        node_rect = node_text.get_rect(topright=(screen_w - 15, 32))
-        snake_rect = snake_text.get_rect(topright=(screen_w - 15, 54))
-        static_rect = static_text.get_rect(topright=(screen_w - 15, 76))
+        # Sắp xếp từ dưới lên trên
+        static_rect = static_text.get_rect(bottomleft=(15, screen_h - 10))
+        snake_rect = snake_text.get_rect(bottomleft=(15, screen_h - 32))
+        node_rect = node_text.get_rect(bottomleft=(15, screen_h - 54))
+        fps_rect = fps_text.get_rect(bottomleft=(15, screen_h - 76))
         
         # Nền cho chữ (bao quát cả 4 dòng)
         max_w = max(fps_rect.width, node_rect.width, snake_rect.width, static_rect.width)
-        bg_rect = pygame.Rect(0, 0, max_w + 20, 100)
-        bg_rect.topright = (screen_w - 10, 8)
+        bg_rect = pygame.Rect(0, 0, max_w + 20, 96)
+        bg_rect.bottomleft = (10, screen_h - 5)
         
         # Box nền bo góc trong suốt
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)

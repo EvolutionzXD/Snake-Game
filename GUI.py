@@ -169,6 +169,65 @@ class PlayerGUI:
         lvl_rect = lvl_text.get_rect(bottomleft=(label_rect.right + 15, label_rect.bottom - 4))
         screen.blit(lvl_shadow, (lvl_rect.x + 1, lvl_rect.y + 1))
         screen.blit(lvl_text, lvl_rect)
+        
+        # Vẽ UI Tiền Táo
+        self._draw_coins(screen)
+
+    def _draw_coins(self, screen):
+        from apple import AppleManager
+        from resources import ResourceManager
+        
+        coins_text = str(AppleManager.coins)
+        text_surf = self.label_font.render(coins_text, True, (255, 215, 0)) # Màu vàng gold
+        text_shadow = self.label_font.render(coins_text, True, (0, 0, 0))
+        
+        tex = ResourceManager.get_instance().get_texture("apple")
+        if not tex: return
+        
+        # Lấy hình ảnh trái táo tĩnh (frame 0)
+        tex_w, tex_h = 32, 32
+        rect = pygame.Rect(0, 0, tex_w, tex_h)
+        try:
+            apple_img = tex.subsurface(rect)
+        except ValueError:
+            apple_img = tex
+            
+        apple_scale = 1.8 # Táo to hơn pill (Khoảng 57x57 pixel)
+        apple_w, apple_h = int(tex_w * apple_scale), int(tex_h * apple_scale)
+        apple_img = pygame.transform.scale(apple_img, (apple_w, apple_h))
+        
+        # Tính toán kích thước cho hình viên thuốc (pill)
+        pill_h = 40 # Pill nhỏ hơn trái táo
+        
+        # Phần dư của táo sẽ thò ra ngoài pill. Pill sẽ dịch sang phải một chút để tạo khoảng trống.
+        apple_offset_x = 10 
+        pill_w = text_surf.get_width() + 35 + (apple_w // 2)
+        
+        # Vị trí
+        margin_x = 20
+        margin_y = 135 
+        pill_x = margin_x + (apple_w // 2) # Dời pill sang phải để nhường chỗ cho nửa trái của trái táo
+        pill_y = margin_y + (apple_h - pill_h) // 2 # Căn giữa pill theo chiều dọc của trái táo
+        
+        pill_rect = pygame.Rect(pill_x, pill_y, pill_w, pill_h)
+        
+        # 1. Vẽ Pill đen bán trong suốt có viền
+        pill_surf = pygame.Surface((pill_w, pill_h), pygame.SRCALPHA)
+        pygame.draw.rect(pill_surf, (20, 20, 20, 220), pill_surf.get_rect(), border_radius=pill_h//2)
+        pygame.draw.rect(pill_surf, (80, 80, 80, 255), pill_surf.get_rect(), width=3, border_radius=pill_h//2)
+        screen.blit(pill_surf, pill_rect)
+        
+        # 2. Vẽ Táo (Đè lên Pill, dời lên cao một chút theo yêu cầu)
+        apple_offset_y = -5
+        apple_x = margin_x
+        apple_y = margin_y + apple_offset_y
+        screen.blit(apple_img, (apple_x, apple_y))
+        
+        # 3. Vẽ Số (Nằm trong Pill, bên phải trái táo)
+        text_x = pill_x + (apple_w // 2) + 5
+        text_y = pill_y + (pill_h - text_surf.get_height()) // 2
+        screen.blit(text_shadow, (text_x + 2, text_y + 2))
+        screen.blit(text_surf, (text_x, text_y))
 
     def _draw_weapon_slot(self, screen):
         from weapon import WeaponManager

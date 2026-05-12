@@ -10,8 +10,8 @@ class AppleManager:
     speed_multiplier = 1.0 # Vũ khí có thể ghi đè biến này để làm chậm
     apple_node = None
     
-    stamina = 1000.0
-    max_stamina = 1000.0
+    stamina = 100.0
+    max_stamina = 100.0
     
     dash_timer = 0.0      # Thời gian còn lại của cú Dash
     dash_cooldown = 0.0   # Thời gian hồi Dash
@@ -23,12 +23,15 @@ class AppleManager:
     # EXP System
     level = 1
     exp = 0
-    max_exp = 100
+    max_exp = 50
     pending_level_ups = 0
+    coins = 0 # Tiền táo
 
-    # Stat Bonuses
-    max_hp_bonus = 0.0
-    max_stamina_bonus = 0.0
+    # Stat Levels (Dùng cho công thức (1+3%)^lvl)
+    hp_lvl = 0
+    stamina_lvl = 0
+    dmg_lvl = 0
+    
     damage_mult = 1.0
     magnet_radius = 200.0
 
@@ -37,13 +40,18 @@ class AppleManager:
         cls.username = data.get("username", "Player")
         cls.exp = data.get("exp", 0)
         cls.level = data.get("level", 1)
-        cls.max_exp = int(100 * (1.5 ** (cls.level - 1)))
-        cls.max_hp_bonus = data.get("max_hp_bonus", 0.0)
-        cls.max_stamina_bonus = data.get("max_stamina_bonus", 0.0)
-        cls.damage_mult = data.get("damage_mult", 1.0)
+        cls.max_exp = int(50 * (1.2 ** (cls.level - 1)))
+        cls.coins = data.get("coins", 0)
         
-        cls.max_stamina = 1000.0 + cls.max_stamina_bonus
+        # Load levels
+        cls.hp_lvl = data.get("hp_lvl", 0)
+        cls.stamina_lvl = data.get("stamina_lvl", 0)
+        cls.dmg_lvl = data.get("dmg_lvl", 0)
+        
+        # Tính toán lại stats dựa trên công thức (1.03 ^ lvl)
+        cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
         cls.stamina = cls.max_stamina
+        cls.damage_mult = 1.0 * (1.03 ** cls.dmg_lvl)
         
         # Sẽ apply max_hp_bonus khi Spawn()
 
@@ -55,7 +63,7 @@ class AppleManager:
             cls.exp -= cls.max_exp
             cls.level += 1
             cls.pending_level_ups += 1
-            cls.max_exp = int(cls.max_exp * 1.5)
+            cls.max_exp = int(cls.max_exp * 1.2)
             leveled_up = True
             
             # Spawn level up particle
@@ -68,10 +76,21 @@ class AppleManager:
         return leveled_up
 
     @classmethod
+    def add_coin(cls, amount=1):
+        cls.coins += amount
+        if cls.apple_node:
+            ParticleManager.get_instance().spawn(
+                pos=cls.apple_node.position, count=5, color=(255, 200, 0), # Màu vàng
+                alpha=200, size_range=(3, 6), speed_range=(50, 150), 
+                lifetime=0.4, gravity=-30.0
+            )
+
+    @classmethod
     def Spawn(cls, pos):
         cls.apple_node = Node(pos)
         cls.apple_node.apply_config(GetAppleConfig())
-        cls.apple_node.MaxHp += cls.max_hp_bonus
+        # Apply HP based on level: Base 100 * (1.03 ^ lvl)
+        cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
         cls.apple_node.Hp = cls.apple_node.MaxHp
 
     @classmethod
@@ -80,7 +99,7 @@ class AppleManager:
         from stage import StageManager
         SaveSystem.get_instance().save_game(
             cls.username, cls.exp, cls.level, StageManager.get_instance().max_unlocked_wave,
-            cls.max_hp_bonus, cls.max_stamina_bonus, cls.damage_mult
+            cls.hp_lvl, cls.stamina_lvl, cls.dmg_lvl, cls.coins
         )
 
     @classmethod
@@ -88,15 +107,16 @@ class AppleManager:
         if not cls.apple_node: return
         
         if upgrade_id == "max_hp":
-            cls.max_hp_bonus += 25.0
-            cls.apple_node.MaxHp += 25.0
+            cls.hp_lvl += 1
+            cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
             cls.apple_node.Hp = cls.apple_node.MaxHp # Hồi máu khi nâng cấp
         elif upgrade_id == "max_stamina":
-            cls.max_stamina_bonus += 200.0
-            cls.max_stamina += 200.0
+            cls.stamina_lvl += 1
+            cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
             cls.stamina = cls.max_stamina
         elif upgrade_id == "damage_mult":
-            cls.damage_mult += 0.15
+            cls.dmg_lvl += 1
+            cls.damage_mult = 1.0 * (1.03 ** cls.dmg_lvl)
         
         cls.save_stats()
 

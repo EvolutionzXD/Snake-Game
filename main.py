@@ -208,6 +208,7 @@ class GameManager:
                         self.state = "SETTINGS"
                     elif action == "confirm_quit":
                         self.is_paused = False
+                        AppleManager.save_stats()
                         self.reset_game()
                         self.main_menu.update_max_wave(StageManager.get_instance().max_unlocked_wave)
                         self.state = "MENU"
@@ -339,6 +340,7 @@ class GameManager:
             ParticleManager.get_instance().update(dt)
             
             if AppleManager.apple_node and AppleManager.apple_node.Hp <= 0:
+                AppleManager.save_stats()
                 self.state = "GAMEOVER"
 
     def drawing(self, dt):
@@ -389,13 +391,13 @@ class GameManager:
             # Các layer đặc biệt luôn nằm trên cùng
             if node.textureName == "projectile":  return 2000000
             if node.textureName == "sword air dash": return 2100000
-            if node is apple_node_ref: return node.position.y + 100000 # Táo (Player) luôn ưu tiên cao hơn chút trong cùng mức Y
             
             # Lấy Y gốc
+            y_val = node.position.y
             if node.snake_head:
-                return node.snake_head.position.y - (node.snake_depth * 0.01)
+                y_val = node.snake_head.position.y - (node.snake_depth * 0.01)
                 
-            return node.position.y
+            return y_val
 
         render_nodes = sorted(
             (n for n in active_nodes if n.mask != -1),
