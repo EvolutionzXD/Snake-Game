@@ -15,7 +15,7 @@ class GridManager:
     def __init__(self):
         self.rows = config.GRID_ROWS
         self.cols = config.GRID_COLS
-        self.screen_w = 1200
+        self.screen_w = 1400
         self.screen_h = 800
         self.cell_w = self.screen_w // self.cols
         self.cell_h = self.screen_h // self.rows
