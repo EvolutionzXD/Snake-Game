@@ -3,9 +3,10 @@ import math
 import random
 import config
 from apple import AppleManager
-
+from config import GLOBAL_SCALE
 class ExpOrb:
     def __init__(self, pos, value=10):
+        """Khởi tạo một orb EXP tại `pos` với giá trị `value`, bắn tạt ra ngẫu nhiên khi vừa rơi."""
         self.position = pygame.math.Vector2(pos)
         self.value = value
         self.speed = 0.0
@@ -43,17 +44,14 @@ class ExpOrb:
         return False
         
     def draw(self, screen, camera):
-        from config import GLOBAL_SCALE
-        from entity import _SCREEN_CENTER
-        target = camera + _SCREEN_CENTER
-        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER
-        
-        # Vẽ orb kinh nghiệm màu xanh lục/ngọc
+        """Vẽ orb EXP lên màn hình dưới dạng vòng tròn xanh ngọc."""
+        draw_pos = self.position - camera
         pygame.draw.circle(screen, (50, 255, 150), (int(draw_pos.x), int(draw_pos.y)), 6 * GLOBAL_SCALE)
         pygame.draw.circle(screen, (200, 255, 220), (int(draw_pos.x), int(draw_pos.y)), 3 * GLOBAL_SCALE)
 
 class CoinOrb:
     def __init__(self, pos, value=1):
+        """Khởi tạo một orb Coin tại `pos` với giá trị `value`, bắn tạt ra ngẫu nhiên khi vừa rơi."""
         self.position = pygame.math.Vector2(pos)
         self.value = value
         self.speed = 0.0
@@ -88,12 +86,8 @@ class CoinOrb:
         return False
         
     def draw(self, screen, camera):
-        from config import GLOBAL_SCALE
-        from entity import _SCREEN_CENTER
-        target = camera + _SCREEN_CENTER
-        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER
-        
-        # Vẽ Coin (Màu vàng rực)
+        """Vẽ orb Coin lên màn hình dưới dạng vòng tròn vàng."""
+        draw_pos = self.position - camera
         pygame.draw.circle(screen, (255, 215, 0), (int(draw_pos.x), int(draw_pos.y)), 6 * GLOBAL_SCALE)
         pygame.draw.circle(screen, (255, 255, 100), (int(draw_pos.x), int(draw_pos.y)), 3 * GLOBAL_SCALE)
 
@@ -123,6 +117,7 @@ class StageManager:
         
     def set_start_wave(self, wave):
         self.start_wave = wave
+        self.current_wave = wave
 
     def reset(self):
         import config
@@ -142,16 +137,25 @@ class StageManager:
         self.progress_bar_obj.last_ratio = 0.0
 
     def spawn_exp(self, pos, value=10):
+        """Sinh một orb EXP tại vị trí `pos`."""
         self.exp_orbs.append(ExpOrb(pos, value))
 
     def spawn_coin(self, pos, value=1):
+        """Sinh một orb Coin tại vị trí `pos`."""
         self.coin_orbs.append(CoinOrb(pos, value))
 
     def on_snake_killed(self, pos, max_hp):
+        """Gọi khi rắn chết: sinh EXP tứ lệ với MaxHp, 30% cơ hội rơi 1–3 Coin, đếm số rắn giết và kiểm tra điều kiện qua Wave."""
         # Rơi EXP tỉ lệ với máu của quái (10% MaxHp)
         exp_value = max_hp * 0.1
         self.spawn_exp(pos, value=int(exp_value))
         
+        # Rơi Tiền (Tỉ lệ 30% rớt từ 1 đến 3 đồng)
+        if random.random() < 0.3:
+            count = random.randint(1, 3)
+            for _ in range(count):
+                self.spawn_coin(pos, value=1)
+                
         self.killed_snakes += 1
         self.check_flags()
         
@@ -159,6 +163,7 @@ class StageManager:
             self.next_wave()
             
     def next_wave(self):
+        """Chuyển sang Wave kế tiếp: reset bộ đếm, cập nhật kỷ lục và lưu game."""
         self.current_wave += 1
         self.killed_snakes = 0
         self.spawned_snakes = 0
@@ -179,6 +184,7 @@ class StageManager:
         )
         
     def process_and_draw(self, dt, screen, camera):
+        """Cập nhật vật lý và vẽ toàn bộ EXP Orb và Coin Orb lên màn hình."""
         alive_exp = []
         for orb in self.exp_orbs:
             if not orb.process(dt):
@@ -198,10 +204,12 @@ class StageManager:
             orb.draw(screen, camera)
             
     def get_current_wave_config(self):
+        """Trả về cấu hình của Wave hiện tại từ danh sách WAVES_DATA."""
         idx = min(self.current_wave - 1, len(self.waves) - 1)
         return self.waves[idx]
 
     def check_flags(self):
+        """Kiểm tra cấu hình Flag của Wave, kích hoạt Huge Wave khi ngưỡng tiến trình đạt yêu cầu."""
         config = self.get_current_wave_config()
         # Tính toán progress dựa theo 'displayed_progress' để trigger khớp hoàn toàn với visual
         # Ta cần quy đổi displayed_progress (tỉ lệ trên target_kills) sang tỉ lệ trên total gốc
@@ -218,6 +226,7 @@ class StageManager:
 
         
     def get_spawn_rate(self, active_snakes_count):
+        """Tính thời gian chờ giữa 2 lần sinh rắn dựa theo số rắn đang trên sân và độ khó Wave."""
         config = self.get_current_wave_config()
         
         # Kiểm tra giới hạn số lượng rắn tối đa trên màn hình
@@ -239,12 +248,14 @@ class StageManager:
         return rate / config["difficulty"]
         
     def notify_spawned(self):
+        """Thông báo rằng một rắn mới vừa được sinh ra, giảm số rắn trong Huge Wave queue (nếu có)."""
         if self.flag_huge_wave_queue > 0:
             self.flag_huge_wave_queue -= 1
         else:
             self.spawned_snakes += 1
             
     def draw_progress_bar(self, screen, dt):
+        """Vẽ thanh tiến trình Wave, các cờ mốc (Flags), chữ "Wave N" lên màn hình."""
         config = self.get_current_wave_config()
         
         # 1. Vẽ thanh tiến trình bằng đối tượng ProgressBar (OOP)

@@ -9,6 +9,7 @@ from resources import ResourceManager
 from particle import ParticleManager
 from apple import AppleManager
 from config import GLOBAL_SCALE
+from entity import Node
 
 class Weapon:
     def __init__(self, name, config_func, texture_name="stick", fire_rate=0.2, speed=1200.0, 
@@ -371,6 +372,135 @@ class FlameExtinguisher(Gun):
             return True
         return False
 
+class TarotCardWeapon(Weapon):
+    def __init__(self, name, config_func, **kwargs):
+        super().__init__(name, config_func, **kwargs)
+        self.hand = []
+        self.max_cards = 3
+        self.card_reload_timer = 0.0
+        self.card_reload_delay = 0.8 # Hồi 1 lá mỗi 0.8s
+        self.active_dummies = []
+        self.is_automatic = False
+        self.is_visible = True
+
+    def update(self, manager, dt):
+        super().update(manager, dt)
+        
+        # Hồi bài
+        if len(self.hand) < self.max_cards:
+            self.card_reload_timer -= dt
+            if self.card_reload_timer <= 0:
+                self.card_reload_timer = self.card_reload_delay
+                self.hand.append(random.randint(0, 4)) # 5 loại bài
+                
+        # Xử lý các lá bài đang bay (dummy)
+        alive_dummies = []
+        for dummy, card_type in self.active_dummies:
+            # Trigger khi lá bài "chết" (Hp <= 0 hoặc is_dead) hoặc khi nó bay chậm lại
+            if dummy.Hp <= 0 or dummy.is_dead or dummy.velocity.length_squared() < 10000:
+                self.trigger_card_effect(dummy.position, card_type)
+                dummy.Hp = 0 
+                dummy.is_dead = True
+            else:
+                alive_dummies.append((dummy, card_type))
+                
+        self.active_dummies = alive_dummies
+        
+        # Ẩn vũ khí khi đang có bài bay
+        self.is_visible = (len(self.active_dummies) == 0)
+
+    def trigger_card_effect(self, pos, card_type):
+        from config import (GetAtkZoneConfig, GetTeleportZoneConfig, GetIceZoneConfig, 
+                            GetAtkX2ZoneConfig, GetPoisonZoneConfig)
+        
+        configs = [GetAtkZoneConfig, GetTeleportZoneConfig, GetIceZoneConfig, 
+                   GetAtkX2ZoneConfig, GetPoisonZoneConfig]
+        
+        zone = ProjectileManager.Spawn(
+            pos, pos, 
+            config_func=configs[card_type],
+            speed=0.0
+        )
+        
+        # Sát thương vẫn cần nhân thêm damage_mult từ AppleManager (ProjectileManager.Spawn đã tự nhân)
+        
+        # --- HIỆU ỨNG PARTICLE ĐẶC TRƯNG ---
+        if card_type == 0: # atk
+            ParticleManager.get_instance().spawn(pos=pos, count=20, color=(255, 50, 50), alpha=200, size_range=(5, 10), speed_range=(100, 300), lifetime=0.5, gravity=0)
+        elif card_type == 1: # teleport
+            if AppleManager.apple_node:
+                loot = Node(AppleManager.apple_node.position)
+                loot.textureName = "apple_ghost"
+                loot.knockback_resistance = 0.2
+                loot.stun_on_hit = 0.5
+                loot.scaleMultiplier = 0.6
+                loot.maskOut = [1]
+                loot.knockback = 150
+                loot.damage = 0
+                loot.hasShadow = True
+                loot.MaxHp = loot.Hp = AppleManager.apple_node.MaxHp; loot.mask = 2 # mask 2 giúp nó được nhận diện như Player
+                loot.lifetime = 15.0 # Mồi nhử sẽ tự hỏng sau 15 giây
+                loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
+                from entity import active_nodes
+                active_nodes.append(loot)
+                AppleManager.apple_node.position = pos.copy()
+            ParticleManager.get_instance().spawn(pos=pos, count=25, color=(180, 50, 255), alpha=200, size_range=(6, 12), speed_range=(150, 400), lifetime=0.6, gravity=0)
+        elif card_type == 2: # ice
+            ParticleManager.get_instance().spawn(pos=pos, count=40, color=(100, 220, 255), alpha=200, size_range=(5, 10), speed_range=(50, 250), lifetime=0.8, gravity=0)
+        elif card_type == 3: # atk x 2
+            ParticleManager.get_instance().spawn(pos=pos, count=40, color=(255, 20, 20), alpha=220, size_range=(8, 15), speed_range=(200, 500), lifetime=0.7, gravity=0)
+        elif card_type == 4: # poison
+            # Tạo "Sương mù độc" phủ kín toàn bộ Radius để người chơi nhận biết
+            pm = ParticleManager.get_instance()
+            # Thực tế bán kính va chạm là hitbox_radius * scaleMultiplier
+            effective_radius = zone.hitbox_radius * zone.scaleMultiplier
+            # Tăng số lượng hạt và rải đều khắp diện tích (dùng sqrt để rải đều ra rìa)
+            for _ in range(120):
+                angle = random.uniform(0, 2 * math.pi)
+                # Math: dist = R * sqrt(random) để các hạt rải đều theo diện tích hình tròn
+                dist = effective_radius * math.sqrt(random.random())
+                p_pos = pos + pygame.math.Vector2(math.cos(angle) * dist, math.sin(angle) * dist)
+                pm.spawn(
+                    pos=p_pos, count=1, color=(80, 255, 50), alpha=random.randint(100, 180),
+                    size_range=(15, 35), speed_range=(2, 8),
+                    lifetime=zone.lifetime * random.uniform(0.7, 1.3), gravity=-3.0
+                )
+
+    def attack(self, manager, pos, target_pos, is_holding):
+        if not is_holding:
+            self.is_charging = False
+            return False
+        
+        if self.is_charging: return False 
+        self.is_charging = True
+            
+        current_time = time.time()
+        if current_time - self.last_fire_time >= self.fire_rate:
+            if len(self.hand) == 0: return False 
+            if AppleManager.stamina < self.stamina_cost: return False
+            
+            AppleManager.stamina -= self.stamina_cost
+            self.last_fire_time = current_time
+            self.current_recoil = self.recoil_dist
+            
+            card_type = self.hand.pop(0)
+            
+            from config import GetCardDummyConfig
+            direction = pygame.math.Vector2(target_pos) - pygame.math.Vector2(pos)
+            if direction.length_squared() > 0:
+                direction = direction.normalize()
+                
+            dummy = ProjectileManager.Spawn(
+                pos, target_pos,
+                config_func=GetCardDummyConfig,
+                speed=self.speed,
+                inherited_velocity=self._get_player_momentum()
+            )
+            
+            self.active_dummies.append((dummy, card_type))
+            return True
+        return False
+
 class RealitySlash(Weapon):
     def __init__(self, name, config_func, **kwargs):
         super().__init__(name, config_func, **kwargs)
@@ -513,7 +643,8 @@ class WeaponManager:
             "FlameThrower": Flamethrower("FlameThrower", GetFlameConfig, texture_name="flame_thrower", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
             "StarPlatinum": StandWeapon("StarPlatinum", GetGhostPunchConfig, texture_name="stick", fire_rate=0.04, speed=0.0, arm_len=0, stick_len=0, recoil=0, scale=0.8, stamina_cost=2.0),
             "FlameExtinguisher": FlameExtinguisher("FlameExtinguisher", GetFoamConfig, texture_name="fire_extinquisher", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
-            "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="RealitySlash", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0)
+            "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="RealitySlash", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0),
+            "TarotCard": TarotCardWeapon("TarotCard", GetProjectileConfig, texture_name="card", fire_rate=0.3, speed=1800.0, arm_len=15, stick_len=30, recoil=5, scale=3.0, stamina_cost=15.0)
         }
         self.active_weapon = self.weapons["Pistol"]
         self.angle = 0 
@@ -543,12 +674,12 @@ class WeaponManager:
         self.last_player_pos = pos
         return self.active_weapon.attack(self, pos, target_pos, is_holding)
 
-    def update_and_draw(self, screen, player_pos, camera, dt):
+    def update(self, dt, player_pos, camera):
         self.last_player_pos = player_pos
         self.last_camera = camera
         self.active_weapon.update(self, dt)
         
-        # Luôn cập nhật góc xoay dựa trên chuột để Stand cũng dùng được
+        # Cập nhật hướng xoay vũ khí
         mouse_scr = pygame.math.Vector2(pygame.mouse.get_pos())
         screen_center = pygame.math.Vector2(600, 400)
         world_mouse = (mouse_scr - screen_center) / GLOBAL_SCALE + camera + screen_center
@@ -558,6 +689,7 @@ class WeaponManager:
             diff = (target_angle - self.angle + 180) % 360 - 180
             self.angle += diff * 20 * dt
 
+    def draw(self, screen, player_pos, camera):
         # Gọi các hiệu ứng vẽ đặc biệt của vũ khí (ví dụ: đường nét đứt, aura, ghost...)
         if hasattr(self.active_weapon, "draw_special"):
             self.active_weapon.draw_special(screen, camera)
@@ -565,6 +697,7 @@ class WeaponManager:
         # StandWeapon không cần vẽ tay/vũ khí đè lên con ma nên return sớm
         if isinstance(self.active_weapon, StandWeapon):
             return
+            
         swing_off = 0
         if isinstance(self.active_weapon, Sword):
             p = self.active_weapon.swing_progress
@@ -573,10 +706,15 @@ class WeaponManager:
                 t = (p-0.1)/0.6
                 swing_off = (1.0 - t) * 210.0 - 120.0 if t > 0 else 90.0
             else: swing_off = (p/0.1) * 90.0
+            
         self._draw_weapon(screen, player_pos, camera, swing_off)
 
     def _draw_weapon(self, screen, player_pos, camera, swing_off):
         tex_name = self.active_weapon.texture_name
+        # Ẩn vũ khí nếu thuộc tính is_visible = False (áp dụng cho TarotCard)
+        if hasattr(self.active_weapon, "is_visible") and not self.active_weapon.is_visible:
+            return
+            
         weapon_tex = ResourceManager.get_instance().get_texture(tex_name)
         if not weapon_tex: return
         s = self.active_weapon.scale
@@ -588,6 +726,11 @@ class WeaponManager:
             off, current_swing = 45, -swing_off
         else:
             off, current_swing = -45, swing_off
+            
+        # TarotCard vẽ thẳng hướng chuột, không cần offset 45 độ như súng/kiếm
+        if isinstance(self.active_weapon, TarotCardWeapon):
+            off = 0
+            
         jitter_pos, jitter_ang = pygame.math.Vector2(0,0), 0
         if self.active_weapon.is_charging and isinstance(self.active_weapon, Sword):
             dur = time.time() - self.active_weapon.charge_start_time

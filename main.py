@@ -28,6 +28,7 @@ pygame.init()
 
 class GameManager:
     def __init__(self):
+        """Khởi tạo GameManager: thiết lập cửa sổ, load tài nguyên, khởi tạo các Manager và đối tượng UI."""
         self.screen_width = 1400
         self.screen_height = 800
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.HWSURFACE | pygame.DOUBLEBUF)
@@ -71,14 +72,15 @@ class GameManager:
         self.stop_overlay.fill((0, 0, 0, 80))
 
     def setup(self):
+        """Khởi động một ván chơi mới: tạo seed ngẫu nhiên, đặt vị trí xuất phát ngẫu nhiên cho nhân vật Táo và đặt lại camera."""
         # Reset các biến game khi bắt đầu màn chơi mới
         self.seed = random.randint(0, 1000000)
         # Sử dụng seed để kết quả random tọa độ là duy nhất cho mỗi ván
         rng = random.Random(self.seed)
         
         # Ngẫu nhiên vị trí bắt đầu trong phạm vi rộng (ví dụ từ -2000 đến 2000)
-        start_x = rng.uniform(-2000, 2000)
-        start_y = rng.uniform(-2000, 2000)
+        start_x = rng.uniform(-10000, 10000)
+        start_y = rng.uniform(-10000, 10000)  
    
         AppleManager.Spawn((start_x, start_y))
         self.snakes = []
@@ -86,6 +88,7 @@ class GameManager:
         self.camera = pygame.math.Vector2(start_x - self.screen_width/2, start_y - self.screen_height/2)
 
     def run(self):
+        """Vòng lặp game chính: xử lý sự kiện, cập nhật logic và render mỗi frame."""
         self.running = True
         
         while self.running:
@@ -108,6 +111,7 @@ class GameManager:
         pygame.quit()
 
     def reset_game(self):
+        """Xóa toàn bộ dữ liệu của ván chơi hiện tại (địch, particle, nhân vật) để chuẩn bị cho ván mới."""
         self.snakes.clear()
         import entity
         entity.active_nodes.clear()
@@ -117,6 +121,8 @@ class GameManager:
         StageManager.get_instance().reset()
 
     def handle_events(self):
+        """Xử lý toàn bộ sự kiện từ bàn phím và chuột: đổi vũ khí (1–8), mở Status (I),
+        tạm dừng (ESC/P), cuộn vũ khí (Q/E/Scroll) và phân phát event tới đúng menu theo state hiện tại."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -128,16 +134,10 @@ class GameManager:
                 if event.key == pygame.K_5: WeaponManager.get_instance().switch_weapon("StarPlatinum")
                 if event.key == pygame.K_6: WeaponManager.get_instance().switch_weapon("FlameExtinguisher")
                 if event.key == pygame.K_7: WeaponManager.get_instance().switch_weapon("RealitySlash") 
-                
+                if event.key == pygame.K_8: WeaponManager.get_instance().switch_weapon("TarotCard")                
                 if event.key == pygame.K_q: WeaponManager.get_instance().cycle_weapon(-1)
                 if event.key == pygame.K_e: WeaponManager.get_instance().cycle_weapon(1)  
-                if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
-                    if self.state == "PLAYING":
-                        self.is_paused = not self.is_paused
-                        if not self.is_paused:
-                            self.pause_menu.confirming_quit = False # Tắt xác nhận nếu unpause
-                    elif self.state == "SETTINGS":
-                        self.state = self.settings_previous_state
+                # Phím I và ESC sẽ được xử lý ở các block state-specific bên dưới để tránh xung đột
             
             if event.type == pygame.MOUSEWHEEL:
                 if self.state == "PLAYING" and not self.is_paused:
@@ -174,7 +174,7 @@ class GameManager:
             
             elif self.state == "SETTINGS":
                 action = self.settings_menu.handle_event(event)
-                if action == "back":
+                if action == "back" or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                     self.state = self.settings_previous_state
             
             elif self.state == "GAMEOVER":
@@ -189,15 +189,23 @@ class GameManager:
                     self.state = "MENU"
             
             elif self.state == "LEVEL_UP":
-                action = self.level_up_menu.handle_event(event)
-                if action == "upgrade_selected":
-                    AppleManager.pending_level_ups -= 1
-                    if AppleManager.pending_level_ups > 0:
-                        self.level_up_menu.setup_cards(upgrade.get_available_upgrades())
-                    else:
-                        self.state = "PLAYING"
+                self.level_up_menu.handle_event(event)
+                # Người dùng chủ động đóng bằng I hoặc ESC
+                if event.type == pygame.KEYDOWN and (event.key == pygame.K_i or event.key == pygame.K_ESCAPE):
+                    self.state = "PLAYING"
             
-            if self.state == "PLAYING":
+            elif self.state == "PLAYING":
+                # Toggle Status Menu
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_i:
+                    self.level_up_menu.setup_cards(upgrade.get_available_upgrades())
+                    self.state = "LEVEL_UP"
+                
+                # Pause handling
+                elif event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_p):
+                    self.is_paused = not self.is_paused
+                    if not self.is_paused:
+                        self.pause_menu.confirming_quit = False
+                
                 if self.is_paused:
                     action = self.pause_menu.handle_event(event)
                     if action == "resume":
@@ -218,6 +226,8 @@ class GameManager:
                         AppleManager.Dash()
 
     def spawning(self, dt):
+        """Kiểm tra bộ hẹn giờ và sinh rắn mới tại vị trí ngẫu nhiên xung quanh người chơi.
+        Loại rắn được chọn theo trọn số ngẫu nhiên có trọng số (weights) của Wave hiện tại."""
         stage_manager = StageManager.get_instance()
         active_snakes = sum(1 for s in self.snakes if any(node.Hp > 0 for node in s.nodes))
         
@@ -265,11 +275,11 @@ class GameManager:
 
 
     def processing(self, dt):
-        # Kiểm tra xem có level up không (Đưa lên đầu để ưu tiên)
+        """Cập nhật toàn bộ logic game mỗi frame: di chuyển camera, AI rắn, vật lý, va chạm,
+        particle, hiệu ứng, vũ khí, kiểm tra thắng/thua và lưu game khi qua sóng."""
+        # Tắt tự động bật bảng lên cấp theo ý người dùng
         if AppleManager.pending_level_ups > 0:
-            self.level_up_menu.setup_cards(upgrade.get_available_upgrades())
-            self.state = "LEVEL_UP"
-            return # Tạm dừng xử lý frame này để hiện menu
+            AppleManager.pending_level_ups = 0 
 
         if AppleManager.apple_node:
             target_cam = AppleManager.apple_node.position - pygame.math.Vector2(self.screen_width/2, self.screen_height/2)
@@ -287,12 +297,13 @@ class GameManager:
             mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
             screen_center = pygame.math.Vector2(self.screen_width/2, self.screen_height/2)
             world_mouse = (mouse_pos - screen_center) / config.GLOBAL_SCALE + self.camera + screen_center
+            WeaponManager.get_instance().update(dt, AppleManager.GetPosition(), self.camera)
             WeaponManager.get_instance().attack(AppleManager.GetPosition(), world_mouse, is_holding=is_trying_to_attack)
 
             self.mouse_dummy.position = AppleManager.GetPosition()
             
-            # Update Grid for AI (Lấy tất cả projectile - mask 3 và special - mask 4)
-            all_projectiles = [n for n in active_nodes if n.mask in (3, 4)]
+            # Update Grid for AI (Lấy tất cả projectile - mask 3, special - mask 4, magic zones - mask 6)
+            all_projectiles = [n for n in active_nodes if n.mask in (3, 4, 6)]
             all_obstacles = EnvironmentalManager.get_instance().active_objects
             wave_config = StageManager.get_instance().get_current_wave_config()
             GridManager.get_instance().update(self.camera, AppleManager.get_all_apples(), all_projectiles, all_obstacles, difficulty=wave_config["difficulty"])
@@ -348,8 +359,9 @@ class GameManager:
         self.screen.fill((200, 200, 200))            
         TileManager.get_instance().process_and_draw(self.screen, shaken_camera)
         
-        if not self.is_paused and EffectManager.get_instance().is_hitstopping():
-            self.screen.blit(self.stop_overlay, (0, 0))            
+        # Bỏ hiệu ứng tối màn hình theo ý người dùng
+        # if not self.is_paused and EffectManager.get_instance().is_hitstopping():
+        #     ...
             
         # --- HỆ THỐNG Y-SORTING TỐI ƯU ---
         apple_node_ref = AppleManager.apple_node
@@ -409,8 +421,7 @@ class GameManager:
         for node in render_nodes: node.draw_sprite(self.screen, shaken_camera)
 
         if AppleManager.apple_node:
-            weapon_dt = 0 if EffectManager.get_instance().is_hitstopping() else dt
-            WeaponManager.get_instance().update_and_draw(self.screen, AppleManager.GetPosition(), shaken_camera, weapon_dt)
+            WeaponManager.get_instance().draw(self.screen, AppleManager.GetPosition(), shaken_camera)
         
         ParticleManager.get_instance().draw(self.screen, shaken_camera)
             

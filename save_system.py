@@ -23,7 +23,7 @@ class SaveSystem:
         slot = slot_num if slot_num is not None else self.current_slot
         return os.path.join(self.save_dir, f"save_{slot}.json")
 
-    def save_game(self, username, exp, level, unlocked_wave, hp_lvl, stamina_lvl, dmg_lvl, coins=0):
+    def save_game(self, username, exp, level, unlocked_wave, hp_lvl, stamina_lvl, dmg_lvl, coins=0, status_points=0):
         data = {
             "username": username,
             "exp": exp,
@@ -32,7 +32,8 @@ class SaveSystem:
             "hp_lvl": hp_lvl,
             "stamina_lvl": stamina_lvl,
             "dmg_lvl": dmg_lvl,
-            "coins": coins
+            "coins": coins,
+            "status_points": status_points
         }
         with open(self.get_save_path(), "w") as f:
             json.dump(data, f)

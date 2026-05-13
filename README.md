@@ -1,18 +1,40 @@
-# BÁO CÁO ĐỒ ÁN IT003.Q21.TTNT
+# 🐍 Rắn Săn Mồi
 
-## THÔNG TIN SINH VIÊN THỰC HIỆN
-- **Mã sinh viên:** 25520109
-- **Họ và tên:** Đặng Xuân Bách
-- **Tên đề tài:** Rắn săn mồi
+> **Đồ án IT003.Q21.TTNT** — Game hành động sinh tồn được xây dựng bằng Python & Pygame.
 
 ---
 
-## 1. Thông tin cơ bản
-- **Ngôn ngữ sử dụng:** Python
-- **Thư viện:** Pygame
+## 👤 Thông Tin Sinh Viên
 
-### Cấu trúc thư mục:
-```text
+| Thông tin | Chi tiết |
+|-----------|----------|
+| **Mã sinh viên** | 25520109 |
+| **Họ và tên** | Đặng Xuân Bách |
+| **Môn học** | IT003.Q21.TTNT |
+| **Tên đề tài** | Rắn Săn Mồi |
+
+---
+
+## 🎮 Giới Thiệu Game
+
+**Rắn Săn Mồi** là game hành động sinh tồn nhìn từ trên xuống (top-down), nơi người chơi điều khiển nhân vật **Táo** đối đầu với các bầy Rắn ngày càng mạnh hơn theo từng làn sóng (Wave). Tiêu diệt rắn để thu thập EXP và Apple Coin, lên cấp, nâng chỉ số và chinh phục những làn sóng kẻ thù nguy hiểm hơn.
+
+---
+
+## 🛠️ Công Nghệ Sử Dụng
+
+- **Ngôn ngữ:** Python 3.x
+- **Thư viện chính:** [Pygame](https://www.pygame.org/)
+- **Thuật toán nổi bật:**
+  - Grid Hash — Tối ưu hóa va chạm từ O(N²) xuống gần O(N)
+  - Noise Function — Sinh địa hình vô tận ngẫu nhiên có logic
+  - BFS + A* (Grid-based) — AI dò đường cho rắn
+
+---
+
+## 📁 Cấu Trúc Thư Mục
+
+```
 Python Project/
 ├── assets/                    # Tài nguyên game
 │   ├── sound/                 # Âm thanh (sfx, music)
@@ -24,125 +46,247 @@ Python Project/
 │       ├── snake.png
 │       └── ... (các sprite khác)
 ├── main.py                    # File chạy chính của Game
-├── apple.py                   # Logic thực thể Táo
-├── snake_entity.py            # Logic thực thể Rắn
-├── entity.py                  # Class base cho các thực thể
-├── weapon.py                  # Hệ thống vũ khí (Pistol, FlameThrower...)
+├── apple.py                   # Logic thực thể Táo (người chơi)
+├── snake_entity.py            # Logic thực thể Rắn (kẻ thù)
+├── entity.py                  # Class base Node cho các thực thể
+├── weapon.py                  # Hệ thống vũ khí
 ├── projectile.py              # Logic đạn bay
-├── particle.py                # Hệ thống hạt (khói, lửa)
-├── GUI.py                     # Giao diện người dùng
+├── particle.py                # Hệ thống hạt hiệu ứng
+├── GUI.py                     # Giao diện người dùng (HUD)
 ├── screens.py                 # Quản lý các màn hình (Menu, Playing)
-├── tile.py                    # Hệ thống bản đồ/gạch
-├── config.py                  # Cấu hình cài đặt game
-├── resources.py               # Quản lý load tài nguyên
-├── effects.py                 # Các hiệu ứng kỹ năng
-├── vfx.py                     # Hiệu ứng hình ảnh (Visual Effects)
-├── fps.py                     # Bộ đếm khung hình
-├── drawhitbox.py              # Công cụ hỗ trợ debug va chạm
-├── save_system.py             # Hệ thống lưu/tải game
-├── upgrade.py                 # Quản lý nâng cấp chỉ số
-├── stage.py                   # Quản lý luồng level, wave và exp/coin orbs
-├── grid.py                    # Hệ thống lưới và AI chỉ đường
-└── README.md                  # Bản tóm tắt báo cáo
+├── tile.py                    # Hệ thống bản đồ vô tận
+├── config.py                  # Cấu hình và định nghĩa NodeConfig
+├── resources.py               # Quản lý và cache tài nguyên
+├── effects.py                 # Camera Shake, HitStop, Damage Numbers
+├── vfx.py                     # Post-processing (Vignette, Chromatic Aberration)
+├── fps.py                     # Bộ đếm và giới hạn khung hình
+├── drawhitbox.py              # Công cụ debug va chạm
+├── save_system.py             # Hệ thống lưu/tải game (JSON)
+├── upgrade.py                 # Quản lý điểm nâng cấp chỉ số
+├── stage.py                   # Quản lý Wave, EXP Orb, Coin Orb
+├── grid.py                    # AI Grid: BFS Scent Map + A* Pathfinding
+└── README.md                  # File này
 ```
 
 ---
 
-## 2. Những nội dung đã thực hiện được
-- Xây dựng game loop nơi mà người chơi điều khiển nhân vật tiêu diệt kẻ thù. 
-  - *Đã phát triển:* Cơ chế thu thập kinh nghiệm (EXP) và tiền tệ (Apple Coin) cho nhân vật để lên cấp.
-- Xây dựng được hệ thống vũ khí linh hoạt để có thể cập nhật thêm vũ khí bất kỳ lúc nào.
-  - *Đã phát triển:* Thêm bộ vũ khí phong phú, đa dạng (RealitySlash, Pistol, AirSword...).
-- Sử dụng thuật toán Noise để sinh địa hình, sinh cây cối, chướng ngại vật.
-  - *Kết hợp:* Dùng hàm Hash để địa hình đa dạng và có logic ổn định hơn.
-- Đã thêm texture chi tiết cho từng loại rắn.
-- Gameplay tương quan đã có đủ các tính năng cơ bản (Cửa hàng/Nâng cấp qua Level Up).
-- Thêm Effect/Particle (hạt bụi, khói, tia lửa) để game đẹp hơn, tăng tính "Juice".
-- Đã tổng quát hóa lớp sinh vật (`Node`) để code và thêm mới thực thể dễ dàng hơn.
-- Cập nhật công cụ Debug mạnh mẽ (Nhấn phím F3) để theo dõi hitbox và AI Grid.
+## 🕹️ Hướng Dẫn Chơi
+
+### Điều Khiển
+
+| Phím | Hành động |
+|------|-----------|
+| `W` `A` `S` `D` | Di chuyển nhân vật |
+| `Chuột Trái` | Tấn công / Giữ để gồng chiêu |
+| `Chuột Phải` | Dash (lướt tốc độ cao, tốn Stamina) |
+| `1` – `8` | Chuyển đổi vũ khí trực tiếp |
+| `Q` / `E` | Cuộn vũ khí lên/xuống |
+| `I` | Mở màn hình Status & Nâng Cấp |
+| `P` / `ESC` | Tạm dừng game |
+| `F3` | Bật/Tắt chế độ Debug (Hitbox, AI Grid) |
+
+### Thu Thập & Tiến Triển
+
+- **EXP Orbs** (màu xanh ngọc): Rơi ra khi tiêu diệt rắn, tự động hút về khi đủ gần.
+- **Coin Orbs** (màu vàng): Có 30% tỉ lệ rơi ra từ rắn (1–3 đồng/lần).
+- **Lên cấp**: Nhận thêm **Status Point** để phân bổ vào HP, Stamina hoặc Sát Thương.
+- **Màn hình Status** (`I`): Khi có điểm thừa, thanh EXP sẽ hiện dấu `!` và gợi ý `Press "I" to upgrade`.
 
 ---
 
-## 3. Chưa thực hiện được / Dự tính làm trong tương lai
-- Chưa có cơ chế cài đặt đồ họa chi tiết để người chơi sử dụng. *(Đã có khung Settings cơ bản)*
-- Cần re-texture lại toàn bộ game cho đồng nhất.
-- Chưa có âm thanh.
-- Cần làm tổng quát hóa logic của rắn sâu hơn nữa. *(Gần đây đã tích hợp thành công thuật toán dò đường Grid-based BFS / A*)*
-- Cần nâng cấp hệ thống lưu game (Mã hóa, giải mã bảo mật). *(Hiện tại đang lưu trữ dưới định dạng chuỗi JSON thô)*
-- Cần thêm vật phẩm trang bị, giáp và shop bán đồ.
+## ⚔️ Hệ Thống Vũ Khí
+
+| # | Tên | Mô tả |
+|---|-----|-------|
+| 1 | **Pistol** | Bắn đạn đơn, tốc độ cao, tiêu chuẩn |
+| 2 | **SMG** | Bắn tự động liên tục, tốn Stamina |
+| 3 | **AirSword** | Kiếm gồng lực — giữ chuột để tích năng lượng, thả để tung đòn |
+| 4 | **FlameThrower** | Phun lửa liên tục, gây sát thương theo thời gian |
+| 5 | **StarPlatinum** | Đặt Stand triệu hồi bóng ma, đấm liên tiếp về phía chuột |
+| 6 | **FlameExtinguisher** | Phun bọt đông lạnh, gây stun kẻ địch |
+| 7 | **RealitySlash** | Vẽ đường cắt thực tế — click giữ 2 điểm để tạo nhát chém cực rộng |
+| 8 | **TarotCard** | Ném bài Tarot bay về phía chuột, nổ ra các hiệu ứng ngẫu nhiên (Tấn công, Băng, Độc, Dịch chuyển...) |
 
 ---
 
-## 4. Tổng quan chi tiết Code Python
+## 📊 Hệ Thống Chỉ Số (Status)
 
-1. **`main.py`**
-   - **Class GameManager:** Lớp quản lý chính.
-   - `__init__`: Khởi tạo màn hình, biến môi trường và trạng thái game.
-   - `setup`: Reset lại các thông số khi bắt đầu ván mới (Seed map, vị trí người chơi).
-   - `handle_events`: Xử lý input từ phím (đổi vũ khí 1-7) và chuột.
-   - `spawning`: Logic sinh quái (Snake) ngẫu nhiên xung quanh người chơi theo thời gian.
-   - `processing`: Cập nhật logic vật lý, AI của rắn và kiểm tra va chạm.
-   - `drawing`: Thực hiện Y-Sorting và vẽ các thực thể lên màn hình theo đúng thứ tự lớp.
+Mỗi lần lên cấp, người chơi nhận **1 Status Point** để phân bổ vào:
 
-2. **`entity.py`**
-   - **Class Node:** Thực thể cơ bản nhất trong game.
-   - `apply_config`: Áp dụng các thông số từ file cấu hình.
-   - `deal_damage_to`: Xử lý trừ máu và kích hoạt hiệu ứng khi tấn công.
-   - `draw_sprite` / `draw_shadow`: Vẽ hình ảnh và bóng đổ của thực thể.
-   - Hàm `process_physics_and_collisions`: Hàm quan trọng nhất để tính toán di chuyển, ma sát và kiểm tra va chạm giữa các thực thể dựa trên hệ thống Grid Hash (tối ưu hiệu năng thay vì O(N^2)).
+| Chỉ số | Hiệu ứng |
+|--------|----------|
+| ❤️ **HP** | Tăng máu tối đa |
+| ⚡ **Stamina** | Tăng thể lực tối đa (Dash, tấn công) |
+| ⚔️ **Damage** | Tăng hệ số sát thương toàn bộ vũ khí |
 
-3. **`apple.py`**
-   - **Class AppleManager:** Quản lý người chơi (nhân vật Táo).
-   - `Process`: Xử lý di chuyển (WASD), hồi phục thể lực và hiệu ứng hoạt ảnh di chuyển.
-   - `Dash`: Logic lướt nhanh khi nhấn chuột phải (tiêu tốn stamina, tăng tốc độ đột ngột).
-   - Quản lý logic lên cấp, thu thập EXP, tiền xu.
+> 💡 **Reset Stats**: Tốn **1000 Apple Coin** để hoàn trả toàn bộ Status Point đã phân bổ.
 
-4. **`snake_entity.py`**
-   - **Class Snake:** Quản lý một con rắn gồm nhiều đốt.
-   - `attract`: Điều khiển đầu rắn hướng về phía mục tiêu (AI săn mồi kết hợp thuật toán lưới).
-   - `_update_body_trailing`: Logic các đốt phía sau di chuyển bám theo đốt phía trước (tạo cảm giác uốn lượn tự nhiên).
+---
 
-5. **`weapon.py`**
-   - **Class WeaponManager:** Quản lý việc chuyển đổi và sử dụng vũ khí của người chơi.
-   - Class `Weapon` (Base) và các con kế thừa (`Gun`, `Sword`, `StandWeapon`, `RealitySlash`...):
-     - `attack`: Hàm thực hiện đòn đánh (bắn đạn, vung kiếm, hoặc tạo vết cắt không gian ảo).
-     - `draw_special`: Vẽ các hiệu ứng riêng biệt của vũ khí (đường aim, bóng ma linh hồn).
+## 🏗️ Kiến Trúc Code Chi Tiết
 
-6. **`tile.py`**
-   - **Class Tile:** Một ô gạch nền.
-   - **Class EnvironmentalManager:** Quản lý thực thể tĩnh (Cây, Đá).
-   - `spawn_at`: Sinh vật thể dựa trên kết quả của thuật toán Noise.
-   - `process`: Xử lý khi vật thể bị phá hủy (vỡ vụn) và rơi ra EXP hoặc Apple Coins / Mồi Nhử.
-   - **Class TileManager:** Xử lý cơ bản đồ vô tận (Infinite Scrolling) bằng cách dịch chuyển các ô gạch khi người chơi di chuyển.
+### `main.py` — GameManager
+Lớp quản lý vòng lặp game chính.
 
-7. **`projectile.py`**
-   - **Class ProjectileManager:** Quản lý đường đạn.
-   - `Spawn`: Hàm tạo ra đạn/nhát chém tại một vị trí, hướng về mục tiêu với các thông số sát thương, tốc độ tùy biến.
+- `__init__`: Khởi tạo màn hình Pygame, biến trạng thái và các manager.
+- `setup`: Reset thông số khi bắt đầu ván mới (seed bản đồ, vị trí nhân vật).
+- `handle_events`: Xử lý input bàn phím (1–8 đổi vũ khí, I mở Status) và chuột.
+- `spawning`: Logic sinh rắn ngẫu nhiên xung quanh người chơi theo tốc độ của từng Wave.
+- `processing`: Cập nhật vật lý, AI rắn và kiểm tra va chạm qua Grid Hash.
+- `drawing`: Y-Sorting và render các thực thể lên màn hình theo đúng thứ tự lớp.
 
-8. **`particle.py`**
-   - **Class ParticleManager:** Quản lý các hạt hiệu ứng nhỏ (`SquareParticle`, `TexturedParticle`).
-   - `spawn` / `spawn_directional`: Sinh ra một cụm hạt hiệu ứng (vụ nổ, tia lửa) theo hướng chỉ định để game đẹp mắt hơn.
+---
 
-9. **`GUI.py`**
-   - **Class ProgressBar:** Vẽ các thanh trạng thái (Máu, Stamina) với hiệu ứng tụt thanh trượt mượt mà.
-   - **Class PlayerGUI:** Tổng hợp các thành phần giao diện lên góc màn hình (Thanh trạng thái, Số dư Táo vàng).
-   - **Class CustomCursor:** Vẽ tâm ngắm chuột tùy biến, có hiệu ứng xoay và co giãn khi nhấn.
+### `entity.py` — Node (Base Entity)
+Class nền tảng cho **mọi** vật thể trong game.
 
-10. **`screens.py`**
-    - **Class MenuButton:** Logic nút bấm trong menu (hiệu ứng phóng to khi di chuột qua).
-    - **Class MainMenu:** Quản lý giao diện, các Slot Lưu Game (Saves) và tương tác tại màn hình khởi đầu game.
+- `apply_config`: Áp dụng `NodeConfig` (sát thương, máu, knockback, mask...).
+- `deal_damage_to`: Trừ máu, kích hoạt Flash, rung màn hình và số sát thương bay lên.
+- `apply_knockback_to`: Đẩy bắn vật thể, kích hoạt **HitStop** (đứng hình) nếu lực đẩy đủ mạnh (>1500).
+- `draw_sprite` / `draw_shadow`: Vẽ sprite và bóng đổ của thực thể.
+- `process_physics_and_collisions` *(hàm trung tâm)*: Tính toán di chuyển, ma sát và kiểm tra va chạm giữa các thực thể bằng **Grid Hash** (tối ưu hiệu năng).
 
-11. **`effects.py`**
-    - **Class CameraShake:** Quản lý độ rung chấn của màn hình.
-    - **Class EffectManager:**
-      - `add_damage_number`: Hiển thị số sát thương bay lên tại vị trí va chạm.
-      - `trigger_hitstop`: Tạo hiệu ứng "khựng" thời gian để tăng cảm giác uy lực.
+---
 
-12. **`vfx.py`**
-    - **Class VFXManager:** 
-      - `apply_post_processing`: Áp dụng các bộ lọc hình ảnh (Shader-like) như Vignette (viền tối) và Chromatic Aberration (nhòe màu) lên màn hình sau khi render 2D.
+### `apple.py` — AppleManager (Người Chơi)
+Quản lý toàn bộ trạng thái và tương tác của nhân vật Táo.
 
-13. **`resources.py`**
-    - **Class ResourceManager:** 
-      - `load_all_sprites`: Tự động quét và nạp tất cả ảnh từ thư mục assets.
-      - Hàm `get_surfaces`: Hàm tối ưu hóa (Caching) hình ảnh, giúp render ảnh xoay góc và tự tạo viền outline mà không làm giảm tốc độ khung hình (FPS).
+- `Process`: Di chuyển WASD, hồi Stamina tự nhiên, cập nhật animation.
+- `Dash`: Lướt nhanh (tốn Stamina, tăng tốc đột ngột).
+- `add_exp` / `add_coin`: Thu thập EXP/tiền và xử lý lên cấp, cấp phát Status Point.
+
+---
+
+### `snake_entity.py` — Snake (Kẻ Địch)
+Quản lý một con rắn nhiều đốt với AI săn mồi thông minh.
+
+- `attract`: Điều khiển đầu rắn bám theo mục tiêu, kết hợp BFS Scent Map và A*.
+- `_update_body_trailing`: Các đốt sau bám theo đốt trước một cách tự nhiên, tạo chuyển động uốn lượn.
+
+---
+
+### `weapon.py` — WeaponManager & Weapon Classes
+Hệ thống vũ khí mở rộng dễ dàng.
+
+- `WeaponManager`: Quản lý đổi vũ khí, truyền góc ngắm và vị trí người chơi.
+- Class `Weapon` (base) và các lớp kế thừa: `Gun`, `Sword`, `StandWeapon`, `FlameExtinguisher`, `RealitySlash`, `TarotCardWeapon`.
+  - `attack`: Thực hiện đòn đánh tương ứng.
+  - `draw_special`: Vẽ hiệu ứng riêng biệt của vũ khí (đường aim, bóng ma, đường chém...).
+
+---
+
+### `tile.py` — TileManager & EnvironmentalManager
+Hệ thống bản đồ vô tận và vật thể môi trường.
+
+- `TileManager`: Render bản đồ vô tận (Infinite Scrolling) bằng cách dịch ô gạch khi người chơi di chuyển.
+- `EnvironmentalManager`: Quản lý Cây và Đá, sinh ra dựa trên Noise Function.
+  - `spawn_at`: Xác định vị trí sinh vật thể qua thuật toán Noise.
+  - `process`: Xử lý phá hủy vật thể và rơi ra EXP/Apple Coin.
+
+---
+
+### `projectile.py` — ProjectileManager
+Quản lý toàn bộ đạn và vùng sát thương.
+
+- `Spawn`: Tạo đạn/nhát chém tại vị trí chỉ định với đầy đủ thông số (sát thương, knockback, stun, lifetime) có thể override.
+
+---
+
+### `particle.py` — ParticleManager
+Hệ thống hạt hiệu ứng.
+
+- `spawn`: Sinh cụm hạt vụ nổ theo mọi hướng.
+- `spawn_directional`: Sinh hạt theo hướng chỉ định (dùng cho đòn kiếm, lửa, v.v.).
+
+---
+
+### `GUI.py` — Giao Diện HUD
+- `ProgressBar`: Thanh trạng thái với hiệu ứng tụt mượt mà (HP, Stamina, EXP, Wave).
+- `PlayerGUI`: Tổng hợp HUD — thanh máu, stamina, EXP, hiển thị Apple Coin và thông báo Status Point.
+- `CustomCursor`: Tâm ngắm chuột tùy biến có hiệu ứng xoay và co giãn khi nhấn.
+
+---
+
+### `screens.py` — Quản Lý Màn Hình
+- `MenuButton`: Nút bấm có hiệu ứng phóng to khi hover.
+- `MainMenu`: Màn hình chính với Slot Lưu Game, chọn Wave và điều hướng.
+- `LevelUpMenu`: Màn hình Status & Upgrade — phân bổ điểm HP/Stamina/Damage, reset stats.
+
+---
+
+### `effects.py` — Hiệu Ứng Chiến Đấu
+- `CameraShake`: Rung màn hình tỉ lệ với độ trauma.
+- `EffectManager`:
+  - `add_damage_number`: Số sát thương bay lên tại điểm va chạm.
+  - `trigger_hitstop`: Đứng hình tích tắc để tăng cảm giác uy lực của đòn nặng.
+
+---
+
+### `vfx.py` — Post-Processing
+- `VFXManager`:
+  - `apply_post_processing`: Áp dụng bộ lọc **Vignette** (viền tối) và **Chromatic Aberration** (nhòe màu) lên toàn màn hình sau khi render.
+
+---
+
+### `resources.py` — Quản Lý Tài Nguyên
+- `ResourceManager`:
+  - `load_all_sprites`: Tự động quét và nạp tất cả ảnh từ thư mục `assets/`.
+  - `get_surfaces`: Cache hình ảnh đã xoay góc và tự tạo viền outline — giúp duy trì FPS cao.
+
+---
+
+### `stage.py` — Quản Lý Wave & Orbs
+- `StageManager`: Điều phối Wave, đếm số rắn đã hạ, kích hoạt Huge Wave qua Flags.
+- `ExpOrb` / `CoinOrb`: Vật phẩm rơi ra, tự hút về người chơi khi đủ gần hoặc sau thời gian nhất định.
+- `on_snake_killed`: Xử lý rơi EXP (tỉ lệ MaxHp) và tiền (30% cơ hội, 1–3 đồng).
+
+---
+
+### `grid.py` — AI Grid
+- Chia bản đồ thành lưới 10×10 ô.
+- **BFS Scent Map**: Tỏa "mùi táo" từ người chơi ra xung quanh để rắn có thể cảm nhận và truy đuổi hiệu quả.
+- **A\* Pathfinding**: Rắn tìm đường thông minh, tránh chướng ngại vật và đạn bay.
+- **Debug F3**: Hiển thị lưới, scent map và đường đi A* trực tiếp trên màn hình.
+
+---
+
+## ✅ Đã Thực Hiện
+
+- [x] Game loop hoàn chỉnh với Wave System, spawn rắn động theo độ khó
+- [x] Hệ thống EXP, Level Up và Status Point (HP / Stamina / Damage)
+- [x] Apple Coin: thu thập từ rắn, cây, đá — dùng để Reset Stats
+- [x] Hệ thống vũ khí linh hoạt, dễ mở rộng (8 vũ khí đa dạng)
+- [x] Địa hình vô tận sinh bằng Noise + Hash Function
+- [x] Texture chi tiết cho từng loại rắn
+- [x] Hiệu ứng Particle / VFX (khói, lửa, bụi, Chromatic Aberration)
+- [x] Hệ thống va chạm tối ưu bằng Grid Hash
+- [x] AI rắn thông minh với BFS Scent Map + A*
+- [x] Lưu/Tải game với 3 Slot (JSON)
+- [x] Công cụ Debug mạnh (F3): Hitbox, AI Grid, Scent Map
+
+## ⏳ Chưa Thực Hiện / Dự Kiến Tương Lai
+
+- [ ] Hệ thống âm thanh (SFX, nhạc nền)
+- [ ] Re-texture toàn bộ game cho đồng nhất về phong cách
+- [ ] Cài đặt đồ họa chi tiết cho người chơi (chất lượng, FPS cap)
+- [ ] Mã hóa file lưu game (thay thế JSON thô)
+- [ ] Shop vật phẩm, trang bị và giáp
+- [ ] Tổng quát hóa sâu hơn hành vi AI của rắn
+
+---
+
+## 🚀 Cách Chạy
+
+```bash
+# Cài đặt thư viện
+pip install pygame
+
+# Chạy game
+python main.py
+```
+
+> **Yêu cầu:** Python 3.10+ và Pygame 2.x
+
+---
+
+*Đồ án IT003.Q21.TTNT — Đặng Xuân Bách (25520109)*

@@ -14,6 +14,13 @@ TOTAL_WIDTH = TILE_SIZE * GRID_COLS
 TOTAL_HEIGHT = TILE_SIZE * GRID_ROWS
 
 def get_terrain_type(grid_x, grid_y):
+    """Xác định loại biôm (grass/stone) cho một ô lưới dựa trên thuật toán **Perlin Noise**.
+
+    - Sử dụng `pnoise2` với scale rất nhỏ (0.01) để tạo ra các **Vùng biôm (Biome) khổng lồ** liền mạch.
+    - `octaves=3`: chồng 3 lớp noise, lớp sau mịn hơn, tạo riề biôm có độ gồ ghề tự nhiên.
+    - Trả về cặp (texture_name, frame_idx) để render tile đúng loại.
+    - `frame_idx` xây dựng từ biểu thức `(grid_x + grid_y) % 2` — hàm hash đơn giản để
+      tạo bàn cờ (checkerboard) phân biệt 2 frame mời mà không cần random."""
     # Dùng Scale nhỏ lại rất lới để tạo thành các VÙNG BIOME (quần xã) khổng lồ
     # Càng nhỏ thì bãi đá/cỏ càng rộng và liền mạch.
     scale = 0.01
@@ -48,6 +55,13 @@ class EnvironmentalManager:
         self.active_objects = []   # [Node] - Danh sách các vật thể đang sống để update
 
     def get_object_type(self, gx, gy, terrain_type):
+        """Quyết định có sinh vật thể tỉnh (rock/tree) tại ô (gx, gy) hay không bằng **Perlin Noise**.
+
+        - Dùng offset seed lớn (+5000) để cảnh quan vật cản **độc lập hoàn toàn** với biôm nền.
+        - Ngưỡng noise khác nhau cho từng loại đảm bảo:
+          * grass (val > 0.2): xuất hiện nhiều bush hơn.
+          * stone (val > 0.4): đá mọc ít hơn, rải rác hơn.
+        - Trả về None nếu ô đó trống."""
         # Dùng chung 1 noise để quyết định có mọc vật thể hay không
         scale = 0.12
         val = noise.pnoise2(gx * scale + 5000, gy * scale + 5000, octaves=2)
@@ -70,6 +84,13 @@ class EnvironmentalManager:
             del self.broken_objects[pos]
 
     def spawn_at(self, gx, gy, pos, terrain_type):
+        """Sinh vật thể tỉnh tại ô (gx, gy) nếu đầu đủ điều kiện.
+
+        Phương pháp hash tích hợp để tạo đa dạng xác định bằng biểu thức:
+        - **Kích thước đá**: `(gx * 41 + gy * 89) % 40` — hàm hash tuyến tính 2 biến
+          đảm bảo mỗi ô có kích thước riêng không trùng lặp.
+        - **Frame đá**: `(gx * 97 + gy * 43) % 100` cộng với Easter Egg 2% tại frame 3.
+        - **Frame bụi**: `(gx * 31 + gy * 17) % 3` để chọn frame 0/1/2 cố định mỗi ô."""
         # Kiểm tra nếu đang trong thời gian chờ respawn
         if (gx, gy) in self.broken_objects:
             if time.time() < self.broken_objects[(gx, gy)]:
@@ -215,6 +236,12 @@ class Tile(Node):
         self.update_terrain()
 
     def update_terrain(self):
+        """Cập nhật texture, frame và các phần tử trang trí của tile dựa trên vị trí lưới mới.
+
+        - **Auto-tiling**: Kiểm tra 4 ô lân cận, nếu tiếp giáp stone thì vẽ viền chuyển tiếp `stone_border`.
+        - **Cỏ trang trí (Decoration)**: Dùng **XOR Hash** `(grid_x * 73856093) ^ (grid_y * 19349663)`
+          — một kỹ thuật phần tán bằng số nguyên tố lớn đảm bảo phân phối đồng đều để
+          quyết định số lượng và vị trí ngẫu nhiên của các bụi cỏ nhỏ mà không dùng random()."""
         grid_x = int(round(self.position.x / TILE_SIZE))
         grid_y = int(round(self.position.y / TILE_SIZE))
         tex, f_idx = get_terrain_type(grid_x, grid_y)
@@ -263,6 +290,13 @@ class Tile(Node):
         self.current_obj = mgr.spawn_at(grid_x, grid_y, self.position.copy(), self.textureName)
 
     def process(self, camera, screen_width, screen_height):
+        """Thực hiện kỹ thuật **Infinite Scrolling bằng Tile Wrapping**:
+
+        - So sánh vị trí tile với tâm camera. Nếu tile ra khỏi phạm vi `[-half_width, half_width]`
+          theo X hoặc Y, nó sẽ được **dịch chuyển sang phía đối diện** (cong nối 2 đầu).
+        - Sau khi dịch, gọi `update_terrain()` để sinh lại texture và vật thể tỉnh đúng với
+          toạ độ mới (dùng Perlin Noise + Hash nên kết quả luôn nhất quán).
+        - Dùng `TOTAL_WIDTH = TILE_SIZE * GRID_COLS` làm chu kỳ cuộn để bản đồ trải dài vô tận."""
         cam_center_x = camera.x + screen_width / 2.0
         cam_center_y = camera.y + screen_height / 2.0
         

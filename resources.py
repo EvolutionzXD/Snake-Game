@@ -24,6 +24,7 @@ class ResourceManager:
         self.fonts = {} # path -> {size -> Font}
 
     def load_all_sprites(self, directory):
+        """Quét thư mục `directory` và nạp tất cả file PNG/JPG/BMP vào bộ nhớ theo dạng `{tên_file: Surface}`."""
         full_dir = resource_path(directory)
         if not os.path.exists(full_dir): return
         for file in os.listdir(full_dir):
@@ -35,6 +36,7 @@ class ResourceManager:
                 except: continue
 
     def load_all_fonts(self, directory):
+        """Quét thư mục `directory` và lưu lại đường dẫn của các file font (.ttf/.otf) để có thể nạp lát khi cần."""
         full_dir = resource_path(directory)
         if not os.path.exists(full_dir): return
         for file in os.listdir(full_dir):
@@ -44,9 +46,12 @@ class ResourceManager:
                 self.fonts[name] = path
 
     def get_texture(self, name):
+        """Trả về Surface của texture theo tên, hoặc None nếu không tìm thấy."""
         return self.textures.get(name, None)
 
     def get_font(self, name, size):
+        """Lấy font theo tên và kích cỡ, có cache bằng dict `{(name, size): Font}`
+        để tránh tại lại file font mỗi lần gọi. Fallback về Arial nếu không tìm thấy font."""
         path = self.fonts.get(name)
         if not path:
             return pygame.font.SysFont("Arial", size)
@@ -66,6 +71,19 @@ class ResourceManager:
 _RENDER_CACHE = {}
 
 def get_surfaces(texture_name, frame, base_scale, scale_mult, angle, flash_effect, hasOutline):
+    """Lấy cặp (outline_surf, sprite_surf) từ **Render Cache** (`dict` toàn cục `_RENDER_CACHE`).
+
+    Thuật toán Cache (cơ chế tương tự LRU Cache nhưng không có límit):
+    - **Quantization** (đơn giản hóa key):
+      * Góc `angle` làm tròn theo bội4 (`int(angle/4)*4`) — giảm 90 giá trị angle khủ thành 90.
+      * Scale làm tròn 1 chữ số thập phân (`round(scale, 1)`) — gom các giá trị gần nhau.
+      * Flash lưu dưới dạng nhị phân (0/1).
+    - Cache key: `(texture_name, frame, base_scale, q_scale, q_angle, q_flash, hasOutline, GLOBAL_SCALE)`.
+    - Nếu **miss** (chưa có trong cache): tạo mới, đưa vào dict và trả về.
+
+    Thuật toán tạo Outline bằng **Pixel Mask**:
+    - Tạo `pygame.Mask` từ sprite, chuyển sang surface đen.
+    - Blit 8 bản sao lệch theo 8 hướng (t, -t, 0) để tạo viền ngoài dày 2px mà không dùng shader."""
     tex = ResourceManager.get_instance().get_texture(texture_name)
     if not tex: return None, None
 

@@ -34,7 +34,7 @@ class NodeConfig:
 
 # --- SNAKE CONFIGS ---
 def GetSnakeHeadConfig():
-    return NodeConfig(textureName="snake", mask=1, maskOut=2, hitbox_radius=30.0, MaxHp=100.0, knockback=700.0, damage=17.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.3, hasShadow=True)
+    return NodeConfig(textureName="snake", mask=1, maskOut=[2, 3], hitbox_radius=30.0, MaxHp=100.0, knockback=700.0, damage=17.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.3, hasShadow=True)
 def GetSnakeBodyConfig():
     return NodeConfig(textureName="snake", mask=1, maskOut=3, hitbox_radius=30.0, MaxHp=100.0, knockback=10.0, damage=17.0, MinFrame=1, MaxFrame=1, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.1, hasShadow=True)
 
@@ -117,7 +117,7 @@ def GetTankSnakeConfig():
                        head_particle_color=(100, 50, 50)) # Dark red particles
 
 def GetStoneSnakeHeadConfig():
-    return NodeConfig(textureName="snake_stone", mask=1, maskOut=2, hitbox_radius=35.0, MaxHp=1500.0, knockback=800.0, damage=50.0, MinFrame=0, MaxFrame=0, scaleMultiplier=0.7, hasOutline=True, canShakeCamera=False, stun_on_hit=0.5, hasShadow=True, knockback_resistance=0.01, can_be_stunned=False)
+    return NodeConfig(textureName="snake_stone", mask=1, maskOut=[2, 3], hitbox_radius=35.0, MaxHp=1500.0, knockback=800.0, damage=50.0, MinFrame=0, MaxFrame=0, scaleMultiplier=0.7, hasOutline=True, canShakeCamera=False, stun_on_hit=0.5, hasShadow=True, knockback_resistance=0.01, can_be_stunned=False)
 
 def GetStoneSnakeBodyConfig():
     return NodeConfig(textureName="snake_stone", mask=1, maskOut=3, hitbox_radius=35.0, MaxHp=1500.0, knockback=20.0, damage=50.0, MinFrame=1, MaxFrame=1, scaleMultiplier=0.7, hasOutline=True, canShakeCamera=False, stun_on_hit=0.2, hasShadow=True, knockback_resistance=0.01, can_be_stunned=False)
@@ -139,9 +139,6 @@ def GetVenomSnakeConfig():
                        has_bullet_awareness=True,
                        head_particle_color=(50, 255, 50)) # Venom Green particles
 
-def GetSniperSnakeHeadConfig():
-    return NodeConfig(textureName="snake_snipper", mask=1, maskOut=2, hitbox_radius=30.0, MaxHp=100.0, knockback=700.0, damage=17.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.3, hasShadow=True)
-
 def GetSniperSnakeConfig():
     return SnakeConfig(size=10, velocity=200.0, length=12.0, headSize=0.5,
                        behavior="sniper",
@@ -151,6 +148,30 @@ def GetSniperSnakeConfig():
                        death_damage=300.0,
                        has_bullet_awareness=True,
                        head_particle_color=(255, 100, 0)) # Orange particles
+
+def GetSniperSnakeHeadConfig():
+    return NodeConfig(textureName="snake_snipper", mask=1, maskOut=[2, 3], hitbox_radius=30.0, MaxHp=100.0, knockback=700.0, damage=17.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.3, hasShadow=True)
+
+#zoneEffect
+def GetCardDummyConfig():
+    return NodeConfig(textureName="card", mask=3, maskOut=1, hitbox_radius=30.0, MaxHp=0.01, knockback=0.0, damage=0.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.0, hasShadow=True, lifetime=1.5)
+
+def GetAtkZoneConfig():
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=80.0, MaxHp=1.0, knockback=50.0, damage=16.0, scaleMultiplier=1.25, hasOutline=False, canShakeCamera=True, stun_on_hit=0.0, lifetime=0.1, MinFrame=0, MaxFrame=0)
+
+def GetTeleportZoneConfig():
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=80.0, MaxHp=1.0, knockback=50.0, damage=5.0, scaleMultiplier=1.25, hasOutline=False, canShakeCamera=True, stun_on_hit=0.2, lifetime=0.3, MinFrame=1, MaxFrame=1)
+
+def GetIceZoneConfig():
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=100.0, MaxHp=1.0, knockback=50.0, damage=5.0, scaleMultiplier=1.5, hasOutline=False, canShakeCamera=True, stun_on_hit=2.5, lifetime=0.1, MinFrame=2, MaxFrame=2)
+
+def GetAtkX2ZoneConfig():
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=90.0, MaxHp=1.0, knockback=50.0, damage=32.0, scaleMultiplier=1.25, hasOutline=False, canShakeCamera=True, stun_on_hit=0.2, lifetime=0.1, MinFrame=3, MaxFrame=3)
+
+def GetPoisonZoneConfig():
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 2, 5], hitbox_radius=110.0, MaxHp=1.0, knockback=0.0, damage=3.0, scaleMultiplier=2.0, hasOutline=False, canShakeCamera=False, stun_on_hit=0.01, lifetime=6.0, MinFrame=4, MaxFrame=4)
+
+
 
 # --- STAGE / WAVE DATA ---
 # total: Tổng số rắn cần giết để qua màn (chưa tính huge wave)
@@ -166,21 +187,21 @@ WAVES_DATA = [
     {"total": 6, "difficulty": 1.0, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.8], "max_on_screen": 5},
     {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 0 ,0 ,100 ], "flags": [0.3, 0.6, 0.9], "max_on_screen": 2},
     
-    {"total": 15, "difficulty": 1.0, "weights": [60, 20, 10, 0, 10, 0], "flags": [0.5], "max_on_screen": 1},
-    {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.5], "max_on_screen": 3},
-    {"total": 30, "difficulty": 1.2, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
-    {"total": 20, "difficulty": 1.2, "weights": [0, 0, 0, 0, 100, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 3},
-    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 70, 10, 20], "flags": [0.5, 0.8], "max_on_screen": 6},
+    {"total": 15, "difficulty": 2.0, "weights": [60, 20, 10, 0, 10, 0], "flags": [0.5], "max_on_screen": 1},
+    {"total": 10, "difficulty": 2.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.5], "max_on_screen": 3},
+    {"total": 30, "difficulty": 2.2, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
+    {"total": 20, "difficulty": 2.2, "weights": [0, 0, 0, 0, 100, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 3},
+    {"total": 10, "difficulty": 2.2, "weights": [0, 0, 0, 70, 10, 20], "flags": [0.5, 0.8], "max_on_screen": 6},
     
-    {"total": 20, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
-    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
+    {"total": 20, "difficulty": 2.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.3, 0.6, 0.9], "max_on_screen": 5},
+    {"total": 10, "difficulty": 2.2, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 7},
     {"total": 5, "difficulty":  5.0, "weights": [0, 0, 0, 0, 0, 100], "flags": [0.3, 0.6, 0.9], "max_on_screen": 1},
-    {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 80, 0, 20], "flags": [0.5, 0.8], "max_on_screen": 4},
-    {"total": 10, "difficulty": 1.0, "weights": [0, 0, 0, 0, 80, 20], "flags": [0.5], "max_on_screen": 3},
+    {"total": 10, "difficulty": 3.2, "weights": [0, 0, 0, 80, 0, 20], "flags": [0.5, 0.8], "max_on_screen": 4},
+    {"total": 10, "difficulty": 3.0, "weights": [0, 0, 0, 0, 80, 20], "flags": [0.5], "max_on_screen": 3},
     
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 4},
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 6},
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 8},
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 10},
-    {"total": 30, "difficulty": 1.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 12},
+    {"total": 30, "difficulty": 3.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 4},
+    {"total": 30, "difficulty": 3.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 6},
+    {"total": 30, "difficulty": 3.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 8},
+    {"total": 30, "difficulty": 3.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 10},
+    {"total": 30, "difficulty": 3.2, "weights": [30, 20, 10, 10, 20, 10], "flags": [0.5, 0.8], "max_on_screen": 12},
 ]

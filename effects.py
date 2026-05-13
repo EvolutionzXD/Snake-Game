@@ -15,16 +15,19 @@ class CameraShake:
         self.trauma = 0.0
         
     def add_trauma(self, amount):
+        """Thêm độ rung chấn cho màn hình (0.0 – 1.0), bị giới hạn tối đa là 1.0."""
         from settings import SettingsManager
         if not SettingsManager.get_instance().get("video", "screen_shake"):
             return
         self.trauma = min(max(self.trauma, amount), 1.0)
         
     def update(self, dt):
+        """Giảm dần độ rung chấn theo thời gian."""
         if self.trauma > 0:
             self.trauma = max(self.trauma - dt, 0.0)
             
     def get_offset(self):
+        """Trả về Vector2 offset ngẫu nhiên tứ lệ với trauma^2 để camera rung có cảm giác tự nhiên."""
         if self.trauma > 0:
             amount = self.trauma ** 2 * 20.0 # Rung tối đa 20 pixel
             return pygame.math.Vector2(random.uniform(-amount, amount), random.uniform(-amount, amount))
@@ -42,12 +45,14 @@ class DamageNumber:
         self.font = ResourceManager.get_instance().get_font("GrapeSoda", size)
         
     def update(self, dt):
+        """Cập nhật vật lý số sát thương (truyền động lượng, trọng lực). Trả về False nếu đã hết thời gian tồn tại."""
         self.lifetime -= dt
         self.position += self.velocity * dt
         self.velocity.y += 300 * dt # Trọng lực
         return self.lifetime > 0
         
     def draw(self, screen, camera):
+        """Vẽ số sát thương lên màn hình với hiệu ứng pop-in, mờ dần và viền chữ."""
         if self.lifetime <= 0: return
         if self.amount < 1: return
         # Tính toán tỉ lệ scale (nhảy vọt lúc đầu rồi thu nhỏ)
@@ -98,6 +103,7 @@ class EffectManager:
         self.hitstop_timer = 0.0 # Thời gian khựng hình
         
     def add_damage_number(self, pos, amount, color=(255, 255, 10), size=30):
+        """Sinh một số sát thương bay lên tại vị trí `pos` (chỉ hiển thị nếu cài đặt bật)."""
         from settings import SettingsManager
         if not SettingsManager.get_instance().get("gameplay", "show_damage_numbers"):
             return
@@ -108,9 +114,11 @@ class EffectManager:
         self.hitstop_timer = duration
 
     def is_hitstopping(self):
+        """Trả về True nếu hiện đang trong trạng thái khựng hình (hitstop_timer > 0)."""
         return self.hitstop_timer > 0
 
     def update_and_draw(self, dt, screen, camera):
+        """Cập nhật bộ đếm HitStop và vẽ các số sát thương đang bay lên màn hình."""
         # Update hitstop timer
         if self.hitstop_timer > 0:
             self.hitstop_timer = max(0, self.hitstop_timer - dt)

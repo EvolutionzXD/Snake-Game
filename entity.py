@@ -71,6 +71,7 @@ class Node:
         active_nodes.append(self)
 
     def apply_config(self, config):
+        """Nạp toàn bộ thông số từ một NodeConfig (máu, sát thương, knockback, mask, texture, v.v.)."""
         self.textureName = config.textureName
         self.hitbox_radius = config.hitbox_radius
         self.MaxHp = config.MaxHp
@@ -98,6 +99,7 @@ class Node:
         self.can_be_stunned = getattr(config, 'can_be_stunned', True)
 
     def deal_damage_to(self, other, amount):
+        """Trừ máu `other` theo `amount`, hiển thị số sát thương nếu nhắm vào rắn, rúng màn hình nếu cấu hình cho phép."""
         other.Hp -= amount
         
         # Kiểm tra xem đòn đánh có nhắm vào kẻ địch (mask 1) không để hiện số damage
@@ -106,32 +108,33 @@ class Node:
         if self.canShakeCamera:
             CameraShake.get_instance().add_trauma(0.5)
         
-        # --- PARTICLE KHI BỊ ĐÁNH (MÁU XANH) ---
-        # hit_count = max(4, min(int(amount / 8), 16))
-        # hit_size  = (3, max(6, min(int(amount / 10), 14)))
-        # ParticleManager.get_instance().spawn(
-        #     pos         = other.position,
-        #     count       = hit_count,
-        #     color       = (60, 220, 80),   # Xanh lá — máu rắn
-        #     alpha       = 230,
-        #     size_range  = hit_size,
-        #     speed_range = (60, 280),
-        #     lifetime    = 0.45,
-        #     gravity     = 300.0,
-        # )
+        # --- PARTICLE KHI BỊ ĐÁNH (Bỏ theo ý người dùng) ---
+        # hit_count = max(5, min(int(amount / 3), 20))
+        # ...
             
     def apply_flash_to(self, other, duration):
+        """Bật hiệu ứng nhấp nháy trắng (Flash) cho `other` trong `duration` giây nếu vũ khí có thuộc tính canApplyFlash."""
         if self.canApplyFlash:
             other.flashEffect = max(other.flashEffect, duration)
 
     def apply_stun_to(self, other, duration):
+        """Gây hiệu ứng stun lên `other` trong `duration` giây, tạm khóa hướng di chuyển của thực thể đó."""
         if getattr(other, 'can_be_stunned', True):
             other.stun = max(other.stun, duration)
 
     def apply_knockback_to(self, other, force):
+        """Dẩy bắn `other` ra xa theo hướng từ self sang other.
+        Nếu lực đẩy vượt 1500, kích hoạt HitStop để tăng cảm giác ủy lực của đòn đánh."""
         resistance = getattr(other, 'knockback_resistance', 1.0)
         actual_force = force * resistance
         if actual_force <= 0: return
+        
+        # --- HIỆU ỨNG KHỰNG HÌNH CHO ĐÒN NẶNG (Screen Freeze) ---
+        # Nếu lực đẩy cực lớn, tạo hiệu ứng dừng hình lâu hơn theo ý bạn
+        if actual_force > 1500 and not getattr(self, 'has_heavy_hit', False):
+            EffectManager.get_instance().trigger_hitstop(0.25) # Tăng từ 0.12 -> 0.25
+            self.has_heavy_hit = True 
+            
         if self.position.distance_squared_to(other.position) > 0:
             push_dir = (other.position - self.position).normalize()
         else:
@@ -139,14 +142,17 @@ class Node:
         other.velocity += push_dir * actual_force
 
     def get_position_id(self):
+        """Trả về toạ độ ô lưới (Grid Cell) dưới dạng tuple (col, row) mà node này đang ở."""
         return (int(self.position.x // CELL_SIZE), int(self.position.y // CELL_SIZE))
 
     def get_surfaces(self):
+        """Lấy cặp surface (outline, sprite) tương ứng với frame và góc xoay hiện tại từ ResourceManager."""
         if not self.textureName or self.is_dead or self.is_dummy: return None, None
         curr_frame = int(self.frame) + self.MinFrame
         return get_surfaces(self.textureName, curr_frame, 4.0, self.scaleMultiplier, self.angle, self.flashEffect, self.hasOutline)
 
     def draw_outline(self, screen, camera):
+        """Vẽ viền outline (nếu có) của node lên màn hình, có hỗ trợ Viewport Culling để tối ưu."""
         outline_surf, _ = self.get_surfaces()
         if not outline_surf: return
         
@@ -165,6 +171,7 @@ class Node:
         screen.blit(outline_surf, rect)
 
     def draw_sprite(self, screen, camera):
+        """Vẽ sprite chính của node lên màn hình, có hỗ trợ Viewport Culling và flip X/Y."""
         _, sprite_surf = self.get_surfaces()
         if not sprite_surf: return
         
@@ -183,6 +190,7 @@ class Node:
         screen.blit(sprite_surf, rect)
 
     def draw_shadow(self, screen, camera):
+        """Vẽ bóng đổ phía dưới node bằng cách tạo mask nối đen và nén theo trục Y (có cache để tránh tính lại mỗi frame)."""
         if not self.hasShadow: return
         _, sprite_surf = self.get_surfaces()
         if not sprite_surf: return
@@ -210,6 +218,11 @@ class Node:
         screen.blit(shadow_surf, rect)
 
 def process_physics_and_collisions(dt):
+    """Hàm cốt lõi được gọi mỗi frame:
+    - Xử lý thực thể chết: tạo particle, rời EXP, dịn danh sách.
+    - Cập nhật vật lý: di chuyển, ma sát, stun, đời sống.
+    - Đăng ký node vào Grid Hash theo mask.
+    - Kiểm tra và xử lý va chạm hiệu quả nh᷑ Grid Hash (gần O(N) thay vì O(N^2))."""
     global active_nodes
     
     # Single pass removal thay vì any() + list comprehension riêng biệt
@@ -301,37 +314,67 @@ def process_physics_and_collisions(dt):
         if node.frame >= (node.MaxFrame - node.MinFrame + 1):
             node.frame = 0.0
             
-        cell = node.get_position_id()
-        if node.mask not in grid_mat: grid_mat[node.mask] = {}
-        if cell not in grid_mat[node.mask]: grid_mat[node.mask][cell] = []
-        grid_mat[node.mask][cell].append(node)
+        # --- GRID REGISTRATION ---
+        radius = node.hitbox_radius * node.scaleMultiplier
+        if radius > CELL_SIZE * 0.5:
+            # Nếu node bự hơn nửa cell, đăng ký vào tất cả các cell mà nó chạm tới
+            min_x = int((node.position.x - radius) // CELL_SIZE)
+            max_x = int((node.position.x + radius) // CELL_SIZE)
+            min_y = int((node.position.y - radius) // CELL_SIZE)
+            max_y = int((node.position.y + radius) // CELL_SIZE)
+            
+            if node.mask not in grid_mat: grid_mat[node.mask] = {}
+            for cx in range(min_x, max_x + 1):
+                for cy in range(min_y, max_y + 1):
+                    cell = (cx, cy)
+                    if cell not in grid_mat[node.mask]: grid_mat[node.mask][cell] = []
+                    grid_mat[node.mask][cell].append(node)
+        else:
+            # Node nhỏ thì chỉ đăng ký vào cell trung tâm (tối ưu hiệu năng)
+            cell = node.get_position_id()
+            if node.mask not in grid_mat: grid_mat[node.mask] = {}
+            if cell not in grid_mat[node.mask]: grid_mat[node.mask][cell] = []
+            grid_mat[node.mask][cell].append(node)
 
     offsets = _GRID_OFFSETS
     for node in active_nodes:
         for maskOut in node.maskOut:
             if maskOut not in grid_mat: continue
             
-            px, py = node.get_position_id()
-            for dx, dy in offsets:
-                cell = (px + dx, py + dy)
-                if cell in grid_mat[maskOut]:
-                    for other in grid_mat[maskOut][cell]:
-                        if node is other or other.invincibility > 0: continue
-                        
-                        r_sum = (node.hitbox_radius * node.scaleMultiplier) + (other.hitbox_radius * other.scaleMultiplier)
-                        dist_sq = node.position.distance_squared_to(other.position)
-                        
-                        if dist_sq < r_sum * r_sum:
-                            # Xử lý va chạm
-                            node.deal_damage_to(other, node.damage)
-                            node.apply_knockback_to(other, node.knockback)
-                            node.apply_stun_to(other, node.stun_on_hit)
-                            node.apply_flash_to(other, 0.5)
-                            other.invincibility = INVINCIBILITY_TIME
-                            
-                            # --- HIỆU ỨNG VA CHẠM MẠNH (JUICE) ---
-                            # Chỉ kích hoạt 1 lần duy nhất cho mỗi projectile để tránh lag
-                            if node.knockback > 2000 and not node.has_heavy_hit:
-                                CameraShake.get_instance().add_trauma(0.6)
-                                EffectManager.get_instance().trigger_hitstop(0.2)
-                                node.has_heavy_hit = True
+            # Tối ưu: Chỉ tìm kiếm trong các cell mà node này thực sự chạm tới
+            radius = node.hitbox_radius * node.scaleMultiplier
+            if radius > CELL_SIZE * 0.5:
+                min_x = int((node.position.x - radius) // CELL_SIZE)
+                max_x = int((node.position.x + radius) // CELL_SIZE)
+                min_y = int((node.position.y - radius) // CELL_SIZE)
+                max_y = int((node.position.y + radius) // CELL_SIZE)
+                
+                for cx in range(min_x, max_x + 1):
+                    for cy in range(min_y, max_y + 1):
+                        cell = (cx, cy)
+                        if cell in grid_mat[maskOut]:
+                            for other in grid_mat[maskOut][cell]:
+                                if node is other or other.invincibility > 0: continue
+                                r_sum = (node.hitbox_radius * node.scaleMultiplier) + (other.hitbox_radius * other.scaleMultiplier)
+                                dist_sq = node.position.distance_squared_to(other.position)
+                                if dist_sq < r_sum * r_sum:
+                                    node.deal_damage_to(other, node.damage)
+                                    node.apply_knockback_to(other, node.knockback)
+                                    node.apply_stun_to(other, node.stun_on_hit)
+                                    node.apply_flash_to(other, 0.5)
+                                    other.invincibility = INVINCIBILITY_TIME
+            else:
+                px, py = node.get_position_id()
+                for dx, dy in offsets:
+                    cell = (px + dx, py + dy)
+                    if cell in grid_mat[maskOut]:
+                        for other in grid_mat[maskOut][cell]:
+                            if node is other or other.invincibility > 0: continue
+                            r_sum = (node.hitbox_radius * node.scaleMultiplier) + (other.hitbox_radius * other.scaleMultiplier)
+                            dist_sq = node.position.distance_squared_to(other.position)
+                            if dist_sq < r_sum * r_sum:
+                                node.deal_damage_to(other, node.damage)
+                                node.apply_knockback_to(other, node.knockback)
+                                node.apply_stun_to(other, node.stun_on_hit)
+                                node.apply_flash_to(other, 0.5)
+                                other.invincibility = INVINCIBILITY_TIME

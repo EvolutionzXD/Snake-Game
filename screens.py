@@ -524,6 +524,7 @@ class LevelUpMenu:
         self.upgrade_font = ResourceManager.get_instance().get_font("GrapeSoda", 40)
         self.upgrades = []
         self.hovered_idx = -1
+        self.hovered_reset = False
         
     def setup_cards(self, upgrades):
         # Lưu lại danh sách nâng cấp cố định
@@ -533,62 +534,96 @@ class LevelUpMenu:
         from apple import AppleManager
         mouse_pos = pygame.mouse.get_pos()
         self.hovered_idx = -1
+        self.hovered_reset = False
         
-        # Overlay làm mờ màn hình game
+        # Overlay
         overlay = pygame.Surface((self.screen_w, self.screen_h), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         screen.blit(overlay, (0, 0))
         
-        # Vẽ khung bảng nâng cấp
-        panel_w, panel_h = 700, 500
+        # Panel
+        panel_w, panel_h = 750, 550
         panel_rect = pygame.Rect((self.screen_w - panel_w)//2, (self.screen_h - panel_h)//2 + 40, panel_w, panel_h)
         pygame.draw.rect(screen, (30, 30, 40), panel_rect, border_radius=20)
         pygame.draw.rect(screen, (70, 70, 90), panel_rect, width=4, border_radius=20)
         
         # Title
-        title_surf = self.title_font.render("STATS UPGRADE", True, (255, 255, 50))
+        title_surf = self.title_font.render("STATUS & UPGRADES", True, (255, 255, 50))
         title_rect = title_surf.get_rect(center=(self.screen_w // 2, panel_rect.top - 50))
         screen.blit(title_surf, title_rect)
         
-        # Hiển thị các dòng chỉ số
-        start_y = panel_rect.top + 60
+        # Status Points
+        points_color = (100, 255, 100) if AppleManager.status_points > 0 else (200, 200, 200)
+        points_surf = self.upgrade_font.render(f"STATUS POINTS: {AppleManager.status_points}", True, points_color)
+        screen.blit(points_surf, (panel_rect.left + 40, panel_rect.top + 20))
+        
+        start_y = panel_rect.top + 80
         row_h = 110
         
         for i, upg in enumerate(self.upgrades):
             row_rect = pygame.Rect(panel_rect.left + 40, start_y + i * row_h, panel_w - 80, 90)
             is_hover = row_rect.collidepoint(mouse_pos)
-            if is_hover: self.hovered_idx = i
             
-            # Vẽ nền dòng (nếu hover thì sáng lên)
             bg_color = (50, 50, 70) if is_hover else (40, 40, 55)
             pygame.draw.rect(screen, bg_color, row_rect, border_radius=15)
-            
-            # Icon/Bullet point
             pygame.draw.circle(screen, (255, 215, 0), (row_rect.left + 40, row_rect.centery), 10)
             
-            # Tên chỉ số và mô tả
             name_surf = self.upgrade_font.render(upg.name, True, (255, 255, 255))
             screen.blit(name_surf, (row_rect.left + 80, row_rect.top + 15))
-            
             desc_surf = self.stat_font.render(upg.description, True, (160, 160, 170))
             screen.blit(desc_surf, (row_rect.left + 80, row_rect.top + 55))
             
-            # Hiển thị "Nút" Upgrade ở bên phải
             btn_w, btn_h = 160, 50
             btn_rect = pygame.Rect(row_rect.right - 180, row_rect.centery - btn_h//2, btn_w, btn_h)
-            btn_color = (50, 255, 50) if is_hover else (30, 180, 30)
-            pygame.draw.rect(screen, btn_color, btn_rect, border_radius=10)
+            can_upgrade = AppleManager.status_points > 0
             
+            if btn_rect.collidepoint(mouse_pos) and can_upgrade:
+                self.hovered_idx = i
+                btn_color = (50, 255, 50)
+            else:
+                btn_color = (30, 180, 30) if can_upgrade else (80, 80, 80)
+                
+            pygame.draw.rect(screen, btn_color, btn_rect, border_radius=10)
             btn_text = self.upgrade_font.render("UPGRADE", True, (0, 0, 0))
             screen.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
 
-        # Hiển thị level hiện tại ở góc dưới bảng
-        level_text = self.stat_font.render(f"CURRENT LEVEL: {AppleManager.level}", True, (200, 200, 200))
+        # RESET STATUS
+        reset_w, reset_h = 300, 50
+        reset_rect = pygame.Rect(panel_rect.right - reset_w - 40, panel_rect.bottom - 70, reset_w, reset_h)
+        can_reset = AppleManager.coins >= 1000
+        
+        if reset_rect.collidepoint(mouse_pos) and can_reset:
+            self.hovered_reset = True
+            reset_color = (255, 50, 50)
+        else:
+            reset_color = (180, 30, 30) if can_reset else (60, 60, 60)
+            
+        pygame.draw.rect(screen, reset_color, reset_rect, border_radius=10)
+        reset_text = self.stat_font.render("RESET STATS (1000 C)", True, (255, 255, 255))
+        screen.blit(reset_text, reset_text.get_rect(center=reset_rect.center))
+
+        # Footer
+        level_text = self.stat_font.render(f"LV {AppleManager.level} | COINS: {AppleManager.coins}", True, (200, 200, 200))
         screen.blit(level_text, (panel_rect.left + 40, panel_rect.bottom - 40))
 
+        # Hint
+        hint_text = self.stat_font.render("PRESS [I] OR [ESC] TO CLOSE", True, (150, 150, 150))
+        screen.blit(hint_text, hint_text.get_rect(midtop=(self.screen_w // 2, panel_rect.bottom + 15)))
+
     def handle_event(self, event):
+        from apple import AppleManager
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1 and self.hovered_idx != -1:
-                self.upgrades[self.hovered_idx].apply()
-                return "upgrade_selected"
+            if event.button == 1:
+                if self.hovered_idx != -1:
+                    # Gọi apply trực tiếp để chạy effect_fn (bao gồm cả trừ điểm và buff chỉ số)
+                    self.upgrades[self.hovered_idx].apply()
+                    # Refresh lại danh sách nâng cấp để cập nhật text (Lvl mới)
+                    import upgrade
+                    self.setup_cards(upgrade.get_available_upgrades())
+                    return "upgrade_selected"
+                elif getattr(self, 'hovered_reset', False):
+                    if AppleManager.reset_stats():
+                        import upgrade
+                        self.setup_cards(upgrade.get_available_upgrades())
+                        return "stats_reset"
         return None

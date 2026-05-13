@@ -43,9 +43,22 @@ class GridManager:
         return pygame.math.Vector2(screen_x + camera.x, screen_y + camera.y)
 
     def is_valid(self, gx, gy):
+        """Kiểm tra xem tọa độ ô lưới (gx, gy) có nằm trong phạm vi của lưới hay không."""
         return 0 <= gx < self.cols and 0 <= gy < self.rows
 
     def update(self, camera, apples, projectiles, obstacles, difficulty=1.0):
+        """Cập nhật 3 bản đồ lưới mỗi frame:
+
+        1. **obstacle_map** (bản đồ vật cản): Đánh dấu các ô có đá/cây chắn đường.
+
+        2. **danger_map** (bản đồ nguy hiểm): Dự đoán quỹ đạo đạn bay và tính điểm
+           nguy hiểm cho từng ô theo công thức `800 / (bước + 1) * fear_multiplier`
+           (rắn khó hơn nhìn xa hơn và sợ đạn hơn).
+
+        3. **apple_dist** (bản đồ khoảng cách): Chạy **Multi-source BFS** (Bộ dưỡng Breadth-First
+           Search nhiều nguồn) xuất phát từ tất cả các ô có Táo, lan toả 8 hướng để
+           tính khoảng cách lưới (Manhattan/Chebyshev) từ mọi ô tới Táo gần nhất.
+           Cấu trúc dữ liệu: `deque` (hàng đợi hai đầu) cho BFS hiệu quả O(N)."""
         # Reset maps
         self.apple_dist = [[float('inf')] * self.cols for _ in range(self.rows)]
         self.danger_map = [[0.0] * self.cols for _ in range(self.rows)]
@@ -120,6 +133,13 @@ class GridManager:
                             queue.append((nx, ny))
 
     def get_best_direction(self, current_world_pos, camera, has_awareness):
+        """Tìm hướng di chuyển tối ưu cho rắn bằng thuật toán **Greedy Best-First Search** (GBFS)
+        kết hợp điểm nguy hiểm:
+
+        - Tính điểm (score) cho 8 ô lân cận: `score = apple_dist + danger_map (nếu aware)`.
+        - Chọn ô có score thấp nhất (gần Táo nhất, tránh đạn nhất).
+        - Rắn có `bullet_awareness` mới cộng thêm chi phí nguy hiểm vào score.
+        - Trả về tọa độ world-space của ô tốt nhất, hoặc None nếu đã chạm Táo / bị kẹt."""
         gx, gy = self.world_to_grid(current_world_pos, camera)
         
         if not self.is_valid(gx, gy):
@@ -163,6 +183,10 @@ class GridManager:
         return None
 
     def draw_debug(self, screen, camera):
+        """Vẽ lỡp phủ debug lên màn hình hiển thị:
+        - **Xanh lá**: giá trị apple_dist (càng đậm = càng gần Táo).
+        - **Đỏ**: giá trị danger_map (càng đậm = nguy hiểm hơn).
+        - **Xám**: các ô obstacle_map (có vật cản)."""
         overlay = pygame.Surface((self.screen_w, self.screen_h), pygame.SRCALPHA)
         # Sử dụng font hệ thống đơn giản cho debug
         try:

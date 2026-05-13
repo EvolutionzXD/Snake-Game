@@ -142,6 +142,22 @@ class PlayerGUI:
         screen.blit(label_shadow, (label_rect.x + 2, label_rect.y + 2))
         screen.blit(label, label_rect)
         
+        # --- THÔNG BÁO STATUS POINT ---
+        # Dấu "!" nếu có điểm thừa (vẽ bên phải thanh EXP)
+        if AppleManager.status_points > 0:
+            import math
+            # Hiệu ứng nhấp nháy cho dấu chấm than
+            alpha = int(155 + 100 * math.sin(pygame.time.get_ticks() * 0.01))
+            alert_surf = self.label_font.render("!", True, (255, 255, 50))
+            alert_surf.set_alpha(alpha)
+            alert_pos = (self.exp_bar.rect.right + 15, self.exp_bar.rect.centery - 20)
+            screen.blit(alert_surf, alert_pos)
+            
+            # Text hướng dẫn: Press "I" to upgrade (nằm dưới thanh EXP)
+            hint_surf = self.font.render('Press "I" to upgrade', True, (255, 255, 50))
+            hint_surf.set_alpha(alpha)
+            screen.blit(hint_surf, (self.exp_bar.rect.x + 20, self.exp_bar.rect.bottom + 5))
+        
         # Hiển thị chỉ số máu
         hp_text = max(0, int(player_node.Hp))
         text = self.font.render(f"{hp_text} / {int(player_node.MaxHp)}", True, (255, 255, 255))
@@ -267,6 +283,10 @@ class PlayerGUI:
             img_rect = rotated_tex.get_rect(center=slot_center)
             screen.blit(rotated_tex, img_rect)
             
+        # Nếu vũ khí là bài Tarot, vẽ bài trên màn hình
+        if weapon.name == "TarotCard":
+            self._draw_card_hand(screen, weapon)
+            
         # 5. Tên vũ khí (viết hoa, đổ bóng)
         name_surf = self.label_font.render(weapon.name.upper(), True, (255, 255, 255))
         name_shadow = self.label_font.render(weapon.name.upper(), True, (0, 0, 0))
@@ -285,6 +305,46 @@ class PlayerGUI:
         hint_rect = hint_surf.get_rect(midtop=(center_x, center_y + slot_radius + 8))
         screen.blit(hint_shadow, (hint_rect.x + 1, hint_rect.y + 1))
         screen.blit(hint_surf, hint_rect)
+
+    def _draw_card_hand(self, screen, weapon):
+        import math
+        from resources import get_surfaces
+        cards = weapon.hand
+        num_cards = len(cards)
+        if num_cards == 0: return
+        
+        # Cấu hình mới: Bẻ góc nhiều hơn và to hơn
+        center_x = screen.get_width() - 250
+        center_y = screen.get_height() - 150 
+        spread_angle = 35 
+        start_angle = - (num_cards - 1) * spread_angle / 2
+        
+        current_time = pygame.time.get_ticks() / 1000.0
+        
+        for i, card_type in enumerate(cards):
+            angle = start_angle + i * spread_angle
+            
+            # Animation bay bổng nhịp nhàng
+            time_offset = current_time * 2.5 + i * 1.0
+            float_y = math.sin(time_offset) * 12.0
+            
+            rad = math.radians(angle - 90) 
+            radius = 60 # Dời tâm ra xa hơn chút để không bị dính chùm
+            cx = center_x + math.cos(rad) * radius
+            cy = center_y + math.sin(rad) * radius + float_y
+            
+            # Lấy surface có cả outline (scale 6.0 cho to rõ)
+            # Sửa lại thứ tự: (name, frame, base_scale, scale_mult, angle, flash, outline)
+            outline_surf, sprite_surf = get_surfaces("card_visual", card_type, 6.0, 1.0, angle, 0, True)
+            
+            if sprite_surf:
+                # Vẽ Outline trước
+                if outline_surf:
+                    rect_o = outline_surf.get_rect(center=(cx, cy))
+                    screen.blit(outline_surf, rect_o)
+                # Vẽ Sprite chính lên trên
+                rect_s = sprite_surf.get_rect(center=(cx, cy))
+                screen.blit(sprite_surf, rect_s)
 
 class CustomCursor:
     def __init__(self):

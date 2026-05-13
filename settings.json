@@ -2,7 +2,7 @@
     "video": {
         "show_fps": true,
         "show_hitbox": false,
-        "show_grid": true,
+        "show_grid": false,
         "screen_shake": true,
         "particles": true
     },

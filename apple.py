@@ -31,12 +31,14 @@ class AppleManager:
     hp_lvl = 0
     stamina_lvl = 0
     dmg_lvl = 0
+    status_points = 0
     
     damage_mult = 1.0
     magnet_radius = 200.0
 
     @classmethod
     def load_data(cls, data):
+        """Nạp dữ liệu người chơi từ file save (EXP, Level, Coin, các chỉ số HP/Stamina/Damage)."""
         cls.username = data.get("username", "Player")
         cls.exp = data.get("exp", 0)
         cls.level = data.get("level", 1)
@@ -47,6 +49,8 @@ class AppleManager:
         cls.hp_lvl = data.get("hp_lvl", 0)
         cls.stamina_lvl = data.get("stamina_lvl", 0)
         cls.dmg_lvl = data.get("dmg_lvl", 0)
+        cls.status_points = data.get("status_points", cls.level - 1 - (cls.hp_lvl + cls.stamina_lvl + cls.dmg_lvl))
+        if cls.status_points < 0: cls.status_points = 0 # Safety check
         
         # Tính toán lại stats dựa trên công thức (1.03 ^ lvl)
         cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
@@ -57,12 +61,14 @@ class AppleManager:
 
     @classmethod
     def add_exp(cls, amount):
+        """Cộng EXP cho người chơi, tự động lên cấp và cấp Status Point nếu EXP đủ ngưỡng."""
         cls.exp += amount
         leveled_up = False
         while cls.exp >= cls.max_exp:
             cls.exp -= cls.max_exp
             cls.level += 1
             cls.pending_level_ups += 1
+            cls.status_points += 1
             cls.max_exp = int(cls.max_exp * 1.2)
             leveled_up = True
             
@@ -77,6 +83,7 @@ class AppleManager:
 
     @classmethod
     def add_coin(cls, amount=1):
+        """Cộng Apple Coin cho người chơi và hiện thị particle vàng nhỏ tại vị trí nhân vật."""
         cls.coins += amount
         if cls.apple_node:
             ParticleManager.get_instance().spawn(
@@ -87,6 +94,7 @@ class AppleManager:
 
     @classmethod
     def Spawn(cls, pos):
+        """Tạo node Táo tại vị trí `pos`, áp dụng config và tính MaxHp dựa trên hp_lvl hiện tại."""
         cls.apple_node = Node(pos)
         cls.apple_node.apply_config(GetAppleConfig())
         # Apply HP based on level: Base 100 * (1.03 ^ lvl)
@@ -95,21 +103,25 @@ class AppleManager:
 
     @classmethod
     def save_stats(cls):
+        """Lưu toàn bộ thống kê người chơi (EXP, Level, Coin, chỉ số nâng cấp) vào Slot hiện tại."""
         from save_system import SaveSystem
         from stage import StageManager
         SaveSystem.get_instance().save_game(
             cls.username, cls.exp, cls.level, StageManager.get_instance().max_unlocked_wave,
-            cls.hp_lvl, cls.stamina_lvl, cls.dmg_lvl, cls.coins
+            cls.hp_lvl, cls.stamina_lvl, cls.dmg_lvl, cls.coins, cls.status_points
         )
 
     @classmethod
     def apply_upgrade(cls, upgrade_id):
-        if not cls.apple_node: return
+        """Dùng 1 Status Point để nâng cấp chỉ số tương ứng với `upgrade_id` (max_hp, max_stamina, damage_mult).
+        Trả về False nếu không đủ Status Point."""
+        if cls.status_points <= 0: return False # Cần status point mới nâng cấp được
         
         if upgrade_id == "max_hp":
             cls.hp_lvl += 1
-            cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
-            cls.apple_node.Hp = cls.apple_node.MaxHp # Hồi máu khi nâng cấp
+            if cls.apple_node:
+                cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
+                cls.apple_node.Hp = cls.apple_node.MaxHp
         elif upgrade_id == "max_stamina":
             cls.stamina_lvl += 1
             cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
@@ -118,10 +130,39 @@ class AppleManager:
             cls.dmg_lvl += 1
             cls.damage_mult = 1.0 * (1.03 ** cls.dmg_lvl)
         
+        cls.status_points -= 1
         cls.save_stats()
+        return True
+
+    @classmethod
+    def reset_stats(cls):
+        """Tiêu 1000 Coin để hoàn trả toàn bộ Status Point đã phân bổ, đưa các chỉ số về giá trị gốc.
+        Trả về False nếu không đủ Coin."""
+        if cls.coins < 1000: return False
+        
+        cls.coins -= 1000
+        total_spent = cls.hp_lvl + cls.stamina_lvl + cls.dmg_lvl
+        cls.status_points += total_spent
+        
+        cls.hp_lvl = 0
+        cls.stamina_lvl = 0
+        cls.dmg_lvl = 0
+        
+        # Reset các chỉ số về mặc định
+        if cls.apple_node:
+            cls.apple_node.MaxHp = 100.0
+            cls.apple_node.Hp = 100.0
+        cls.max_stamina = 100.0
+        cls.stamina = 100.0
+        cls.damage_mult = 1.0
+        
+        cls.save_stats()
+        return True
 
     @classmethod
     def Process(cls, dt):
+        """Cập nhật nhân vật Táo mỗi frame: hồi máu/stamina tự nhiên, xử lý di chuyển WASD,
+        animation Dash, đầu bụi khi chạy và điều chỉnh ảnh flip theo hướng dạng."""
         if not cls.apple_node: return
         
         # Hồi máu (1% mỗi giây) và Hồi thể lực (5% mỗi giây)
@@ -176,6 +217,7 @@ class AppleManager:
 
     @classmethod
     def Dash(cls, power=2000.0):
+        """Thực hiện cú Dash theo hướng di chuyển (hoặc hướng đang nhìn), tiêu 10 Stamina, tạo bất khả xâm phạm tạm thời."""
         if not cls.apple_node or cls.dash_cooldown > 0 or cls.stamina < 30.0: return
         
         cls.stamina -= 10.0 # Tiêu hao 10 thể lực mỗi lần Dash
@@ -204,9 +246,11 @@ class AppleManager:
 
     @classmethod
     def get_all_apples(cls):
+        """Trả về danh sách tất cả node Táo (mask=2) còn sống trong active_nodes."""
         from entity import active_nodes
         return [n for n in active_nodes if n.mask == 2 and not n.is_dead]
 
     @classmethod
     def GetPosition(cls):
+        """Trả về vị trí hiện tại của apple_node, hoặc Vector2(0,0) nếu nhân vật chưa tồn tại."""
         return cls.apple_node.position if cls.apple_node else pygame.math.Vector2(0,0)
