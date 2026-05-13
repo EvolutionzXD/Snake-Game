@@ -122,6 +122,7 @@ def GetStoneSnakeHeadConfig():
 def GetStoneSnakeBodyConfig():
     return NodeConfig(textureName="snake_stone", mask=1, maskOut=3, hitbox_radius=35.0, MaxHp=1500.0, knockback=20.0, damage=50.0, MinFrame=1, MaxFrame=1, scaleMultiplier=0.7, hasOutline=True, canShakeCamera=False, stun_on_hit=0.2, hasShadow=True, knockback_resistance=0.01, can_be_stunned=False)
 
+
 def GetStoneSnakeConfig():
     return SnakeConfig(size=15, velocity=300.0, length=22.0, headSize=1,
                        headConfig=GetStoneSnakeHeadConfig(),
@@ -130,8 +131,16 @@ def GetStoneSnakeConfig():
                        has_bullet_awareness=False,
                        head_particle_color=(150, 150, 150)) # Greyish particles
 
+def GetVenomSnakeHeadConfig():
+    return NodeConfig(textureName="snake_venom", mask=1, maskOut=[2, 3], hitbox_radius=30.0, MaxHp=100.0, knockback=700.0, damage=17.0, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.3, hasShadow=True)
+
+def GetVenomSnakeBodyConfig():
+    return NodeConfig(textureName="snake_venom", mask=1, maskOut=3, hitbox_radius=30.0, MaxHp=100.0, knockback=10.0, damage=17.0, MinFrame=1, MaxFrame=1, scaleMultiplier=0.5, hasOutline=True, canShakeCamera=False, stun_on_hit=0.1, hasShadow=True)
+
 def GetVenomSnakeConfig():
     return SnakeConfig(size=8, velocity=700.0, length=14.0, headSize=0.4,
+                       headConfig=GetVenomSnakeHeadConfig(),
+                       bodyConfig=GetVenomSnakeBodyConfig(),
                        behavior="ranged",
                        shoot_interval=0.5,
                        ranged_damage=12.0,
@@ -180,10 +189,10 @@ def GetPoisonZoneConfig():
 # flags: Các mốc % (0.0 - 1.0) sẽ kích hoạt Huge Wave
 # max_on_screen: Số lượng rắn tối đa xuất hiện cùng lúc trên map
 WAVES_DATA = [    
-    
+    {"total": 2, "difficulty": 1.0, "weights": [0, 0 ,0, 0, 100, 0], "flags": [0.5], "max_on_screen": 2},
     {"total": 5, "difficulty": 1.0, "weights": [80, 10, 10, 0, 0, 0], "flags": [0.5], "max_on_screen": 1},
-    {"total": 10, "difficulty": 1.0, "weights": [60, 20, 20, 0, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 2},
-    {"total": 12, "difficulty": 1.0, "weights": [40, 30, 20, 10, 0, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 1},
+    {"total": 10, "difficulty": 1.0, "weights": [60, 20, 10, 10, 0, 0], "flags": [0.5, 0.9], "max_on_screen": 2},
+    {"total": 12, "difficulty": 1.0, "weights": [30, 30, 20, 20, 0, 0], "flags": [0.3, 0.6, 0.9], "max_on_screen": 1},
     {"total": 6, "difficulty": 1.0, "weights": [0, 0, 0, 100, 0, 0], "flags": [0.5, 0.8], "max_on_screen": 5},
     {"total": 10, "difficulty": 1.2, "weights": [0, 0, 0, 0 ,0 ,100 ], "flags": [0.3, 0.6, 0.9], "max_on_screen": 2},
     

@@ -83,6 +83,7 @@ class GameManager:
         start_y = rng.uniform(-10000, 10000)  
    
         AppleManager.Spawn((start_x, start_y))
+        AppleManager.stamina = AppleManager.max_stamina
         self.snakes = []
         # Khởi tạo camera ngay tại vị trí Táo vừa mọc
         self.camera = pygame.math.Vector2(start_x - self.screen_width/2, start_y - self.screen_height/2)

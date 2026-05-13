@@ -462,7 +462,7 @@ class TarotCardWeapon(Weapon):
                 p_pos = pos + pygame.math.Vector2(math.cos(angle) * dist, math.sin(angle) * dist)
                 pm.spawn(
                     pos=p_pos, count=1, color=(80, 255, 50), alpha=random.randint(100, 180),
-                    size_range=(15, 35), speed_range=(2, 8),
+                    size_range=(15, 35), speed_range=(10, 50),
                     lifetime=zone.lifetime * random.uniform(0.7, 1.3), gravity=-3.0
                 )
 
