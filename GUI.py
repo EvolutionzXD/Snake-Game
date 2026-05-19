@@ -1,4 +1,7 @@
 import pygame
+import random
+import math
+import time
 
 class ProgressBar:
     def __init__(self, rect, color, bg_color=(30, 30, 35), smooth_color=(255, 255, 255), 
@@ -74,6 +77,31 @@ class ProgressBar:
         # 6. Viền (Border) - Vẽ cuối cùng để đè lên ranh giới
         pygame.draw.rect(screen, (10, 10, 15), self.rect, self.border_thickness, border_radius=radius)
 
+# --- EFFECT CLASSES FOR UI ---
+class AuraParticle:
+    def __init__(self, pos, color):
+        self.pos = pygame.math.Vector2(pos)
+        # Bay lên với vận tốc ngẫu nhiên
+        self.vel = pygame.math.Vector2(random.uniform(-40, 40), random.uniform(-180, -60))
+        self.color = color
+        self.size = random.uniform(10, 25)
+        self.lifetime = 1.0
+        self.max_lifetime = 1.0
+        
+    def update(self, dt):
+        self.lifetime -= dt
+        self.pos += self.vel * dt
+        # Giảm dần kích thước và alpha
+        return self.lifetime > 0
+
+    def draw(self, screen, color):
+        # Giữ alpha cố định ở mức cao để không bị mờ đi theo thời gian
+        alpha = 230 
+        # Tạo surface nhỏ để vẽ alpha cho hình tròn
+        s = pygame.Surface((int(self.size * 2), int(self.size * 2)), pygame.SRCALPHA)
+        pygame.draw.circle(s, (*color, alpha), (int(self.size), int(self.size)), int(self.size))
+        screen.blit(s, (self.pos.x - self.size, self.pos.y - self.size))
+
 class PlayerGUI:
     def __init__(self):
         from resources import ResourceManager
@@ -87,6 +115,7 @@ class PlayerGUI:
         self.slot_scale = 1.0
         self.slot_angle = 0.0
         self.was_holding_attack = False
+        self.aura_particles = [] # Danh sách hạt lửa cho Awaken
 
     def draw(self, screen, player_node, dt):
         if not player_node: return
@@ -132,6 +161,29 @@ class PlayerGUI:
         self.stamina_bar.draw(screen, AppleManager.stamina, AppleManager.max_stamina, dt)
         self.exp_bar.draw(screen, AppleManager.exp, AppleManager.max_exp, dt)
         
+        # --- JACKPOT RGB EFFECT ---
+        from weapon import WeaponManager, TarotCardWeapon
+        active_w = WeaponManager.get_instance().active_weapon
+        if isinstance(active_w, TarotCardWeapon) and active_w.jackpot_timer > 0:
+            # Tính toán màu RGB xoay vòng
+            t = pygame.time.get_ticks() * 0.005
+            r = int(127 + 127 * math.sin(t))
+            g = int(127 + 127 * math.sin(t + 2.094))
+            b = int(127 + 127 * math.sin(t + 4.188))
+            rainbow = (r, g, b)
+            highlight = (min(255, r+50), min(255, g+50), min(255, b+50))
+            
+            self.hp_bar.color = rainbow
+            self.hp_bar.highlight_color = highlight
+            self.stamina_bar.color = rainbow
+            self.stamina_bar.highlight_color = highlight
+        else:
+            # Khôi phục màu gốc
+            self.hp_bar.color = (40, 180, 40)
+            self.hp_bar.highlight_color = (40, 191, 50)
+            self.stamina_bar.color = (40, 120, 220)
+            self.stamina_bar.highlight_color = (40, 190, 220)
+
         # Hiển thị Tên
         display_name = getattr(AppleManager, 'username', 'PLAYER').upper()
         label = self.label_font.render(display_name, True, (255, 255, 255))
@@ -145,7 +197,6 @@ class PlayerGUI:
         # --- THÔNG BÁO STATUS POINT ---
         # Dấu "!" nếu có điểm thừa (vẽ bên phải thanh EXP)
         if AppleManager.status_points > 0:
-            import math
             # Hiệu ứng nhấp nháy cho dấu chấm than
             alpha = int(155 + 100 * math.sin(pygame.time.get_ticks() * 0.01))
             alert_surf = self.label_font.render("!", True, (255, 255, 50))
@@ -174,8 +225,9 @@ class PlayerGUI:
         screen.blit(text_s_shadow, (text_s_rect.x + 1, text_s_rect.y + 1))
         screen.blit(text_s, text_s_rect)
         
-        # Vẽ Weapon Slot
-        self._draw_weapon_slot(screen)
+        # Vẽ Weapon Slots (3 slot)
+        self.draw_weapon_effects(screen, dt) # Vẽ hiệu ứng bốc lửa trước
+        self._draw_weapon_slots(screen)
         
         # Hiển thị Level
         lvl_text = self.font.render(f"LV {AppleManager.level}", True, (255, 200, 50))
@@ -191,120 +243,196 @@ class PlayerGUI:
 
     def _draw_coins(self, screen):
         from apple import AppleManager
+        sw = screen.get_width()
+        
+        # --- 1. VẼ APPLE COINS ---
+        self._draw_coin_pill(screen, sw - 60, 20, "apple", AppleManager.coins, (255, 215, 0))
+        
+        # --- 2. VẼ ROCK COINS (PEPPER) ---
+        # Vẽ ngay bên dưới Apple Coin
+        self._draw_coin_pill(screen, sw - 60, 70, "rock", AppleManager.pepper_coins, (210, 245, 255))
+
+    def _draw_coin_pill(self, screen, right_x, top_y, icon_name, amount, text_color):
         from resources import ResourceManager
-        
-        coins_text = str(AppleManager.coins)
-        text_surf = self.label_font.render(coins_text, True, (255, 215, 0)) # Màu vàng gold
-        text_shadow = self.label_font.render(coins_text, True, (0, 0, 0))
-        
-        tex = ResourceManager.get_instance().get_texture("apple")
+        tex = ResourceManager.get_instance().get_texture(icon_name)
         if not tex: return
+
+        # Render Text
+        amount_str = str(amount)
+        text_surf = self.label_font.render(amount_str, True, text_color)
+        text_shadow = self.label_font.render(amount_str, True, (0, 0, 0))
         
-        # Lấy hình ảnh trái táo tĩnh (frame 0)
+        # Prepare Icon
         tex_w, tex_h = 32, 32
-        rect = pygame.Rect(0, 0, tex_w, tex_h)
-        try:
-            apple_img = tex.subsurface(rect)
-        except ValueError:
-            apple_img = tex
-            
-        apple_scale = 1.8 # Táo to hơn pill (Khoảng 57x57 pixel)
-        apple_w, apple_h = int(tex_w * apple_scale), int(tex_h * apple_scale)
-        apple_img = pygame.transform.scale(apple_img, (apple_w, apple_h))
+        # Nếu là rock thì lấy frame đầu
+        icon_img = tex.subsurface(pygame.Rect(0, 0, tex_w, tex_h)) if tex.get_width() > 32 else tex
+        icon_scale = 1.5
+        icon_w, icon_h = int(tex_w * icon_scale), int(tex_h * icon_scale)
+        icon_img = pygame.transform.scale(icon_img, (icon_w, icon_h))
         
-        # Tính toán kích thước cho hình viên thuốc (pill)
-        pill_h = 40 # Pill nhỏ hơn trái táo
+        # Pill Dimensions
+        pill_h = 36
+        pill_w = text_surf.get_width() + 45
+        pill_x = right_x - pill_w
+        pill_rect = pygame.Rect(pill_x, top_y + (icon_h - pill_h)//2, pill_w, pill_h)
         
-        # Phần dư của táo sẽ thò ra ngoài pill. Pill sẽ dịch sang phải một chút để tạo khoảng trống.
-        apple_offset_x = 10 
-        pill_w = text_surf.get_width() + 35 + (apple_w // 2)
-        
-        # Vị trí
-        margin_x = 20
-        margin_y = 135 
-        pill_x = margin_x + (apple_w // 2) # Dời pill sang phải để nhường chỗ cho nửa trái của trái táo
-        pill_y = margin_y + (apple_h - pill_h) // 2 # Căn giữa pill theo chiều dọc của trái táo
-        
-        pill_rect = pygame.Rect(pill_x, pill_y, pill_w, pill_h)
-        
-        # 1. Vẽ Pill đen bán trong suốt có viền
+        # Draw Pill BG
         pill_surf = pygame.Surface((pill_w, pill_h), pygame.SRCALPHA)
-        pygame.draw.rect(pill_surf, (20, 20, 20, 220), pill_surf.get_rect(), border_radius=pill_h//2)
-        pygame.draw.rect(pill_surf, (80, 80, 80, 255), pill_surf.get_rect(), width=3, border_radius=pill_h//2)
-        screen.blit(pill_surf, pill_rect)
+        pygame.draw.rect(pill_surf, (20, 20, 20, 180), pill_surf.get_rect(), border_radius=pill_h//2)
+        pygame.draw.rect(pill_surf, (255, 255, 255, 100), pill_surf.get_rect(), width=2, border_radius=pill_h//2)
+        screen.blit(pill_surf, pill_rect.topleft)
         
-        # 2. Vẽ Táo (Đè lên Pill, dời lên cao một chút theo yêu cầu)
-        apple_offset_y = -5
-        apple_x = margin_x
-        apple_y = margin_y + apple_offset_y
-        screen.blit(apple_img, (apple_x, apple_y))
+        # Draw Icon
+        screen.blit(icon_img, (pill_x - icon_w//2, top_y))
         
-        # 3. Vẽ Số (Nằm trong Pill, bên phải trái táo)
-        text_x = pill_x + (apple_w // 2) + 5
-        text_y = pill_y + (pill_h - text_surf.get_height()) // 2
+        # Draw Text
+        text_x = pill_x + 25
+        text_y = pill_rect.centery - text_surf.get_height()//2
         screen.blit(text_shadow, (text_x + 2, text_y + 2))
         screen.blit(text_surf, (text_x, text_y))
 
-    def _draw_weapon_slot(self, screen):
-        from weapon import WeaponManager
-        from resources import ResourceManager
-        weapon = WeaponManager.get_instance().active_weapon
-        if not weapon: return
+    def draw_weapon_effects(self, screen, dt):
+        """Vẽ hiệu ứng bốc lửa và glow cho vũ khí Awakened hoặc khi Jackpot."""
+        from weapon import WeaponManager, TarotCardWeapon
+        manager = WeaponManager.get_instance()
+        active_weapon = manager.active_weapon
         
-        # Cấu hình Slot hình tròn to hơn
-        slot_radius = 55
-        margin_x = 35
-        margin_y = 70 # Tăng margin Y để đẩy toàn bộ cụm lên trên, tránh mất chữ hint
-        center_x = screen.get_width() - slot_radius - margin_x
-        center_y = screen.get_height() - slot_radius - margin_y
-        slot_center = (center_x, center_y)
+        # Kiểm tra Jackpot từ TarotCard (nếu có)
+        tarot = manager.weapons.get("TarotCard")
+        is_jackpot = tarot and getattr(tarot, "jackpot_timer", 0) > 0
         
-        # 1. Vẽ bóng đổ phía dưới
-        pygame.draw.circle(screen, (15, 15, 15), (center_x + 5, center_y + 5), slot_radius)
-        
-        # 2. Vẽ nền hình tròn
-        pygame.draw.circle(screen, (45, 45, 50), slot_center, slot_radius)
-        
-        # 3. Vẽ viền trắng trước (để vũ khí đè lên viền cho hiệu ứng pop-out)
-        pygame.draw.circle(screen, (255, 255, 255), slot_center, slot_radius, 4)
-        
-        # 4. Vẽ Texture vũ khí (Áp dụng Animation: Pop & Tilt)
-        tex = ResourceManager.get_instance().get_texture(weapon.texture_name)
-        if tex:
-            w, h = tex.get_size()
-            # Scale gốc (1.2x đường kính) nhân thêm với animation scale
-            total_scale = ((slot_radius * 2 * 1.2) / max(w, h)) * self.slot_scale
-            draw_w, draw_h = int(w * total_scale), int(h * total_scale)
-            scaled_tex = pygame.transform.scale(tex, (draw_w, draw_h))
+        # Hiện aura nếu vũ khí đang cầm là Awaken HOẶC đang trong trạng thái Jackpot
+        if not (active_weapon and getattr(active_weapon, "is_awakened", False)) and not is_jackpot:
+            self.aura_particles.clear()
+            return
             
-            # Áp dụng độ nghiêng khi tấn công
-            rotated_tex = pygame.transform.rotate(scaled_tex, self.slot_angle)
-            
-            img_rect = rotated_tex.get_rect(center=slot_center)
-            screen.blit(rotated_tex, img_rect)
-            
-        # Nếu vũ khí là bài Tarot, vẽ bài trên màn hình
-        if weapon.name == "TarotCard":
-            self._draw_card_hand(screen, weapon)
-            
-        # 5. Tên vũ khí (viết hoa, đổ bóng)
-        name_surf = self.label_font.render(weapon.name.upper(), True, (255, 255, 255))
-        name_shadow = self.label_font.render(weapon.name.upper(), True, (0, 0, 0))
-        # Thu nhỏ tên lại một chút so với font PLAYER
-        name_surf = pygame.transform.scale(name_surf, (int(name_surf.get_width() * 0.6), int(name_surf.get_height() * 0.6)))
-        name_shadow = pygame.transform.scale(name_shadow, (int(name_shadow.get_width() * 0.6), int(name_shadow.get_height() * 0.6)))
+        sw, sh = screen.get_size()
+        bx = sw - 100 # Vị trí bx, by khớp với Active Slot ở dưới
+        by = sh - 100
         
-        name_rect = name_surf.get_rect(midbottom=(center_x, center_y - slot_radius - 10))
-        screen.blit(name_shadow, (name_rect.x + 2, name_rect.y + 2))
-        screen.blit(name_surf, name_rect)
+        # 1. Phát sáng Glow phía sau (RGB Cycle)
+        t = time.time() * 2.0
+        r = int(127 + 127 * math.sin(t))
+        g = int(127 + 127 * math.sin(t + 2))
+        b = int(127 + 127 * math.sin(t + 4))
+        glow_color = (r, g, b)
+        
+        glow_surf = pygame.Surface((200, 200), pygame.SRCALPHA)
+        for radius in range(70, 40, -5):
+            alpha = int(30 * (1.0 - (radius-40)/30))
+            pygame.draw.circle(glow_surf, (*glow_color, alpha), (100, 100), radius)
+        screen.blit(glow_surf, glow_surf.get_rect(center=(bx, by)))
+        
+        # 2. Sinh hạt lửa/bọt (Aura) - To hơn và ít hơn cho đỡ rối
+        for _ in range(2): # Giảm xuống còn 2 hạt mỗi frame
+            spawn_pos = (bx + random.uniform(-60, 60), by + random.uniform(20, 50))
+            self.aura_particles.append(AuraParticle(spawn_pos, glow_color))
+            
+        # 3. Cập nhật và vẽ hạt
+        for p in self.aura_particles[:]:
+            if not p.update(dt):
+                self.aura_particles.remove(p)
+            else:
+                p.draw(screen, glow_color) # Truyền glow_color để đồng bộ tất cả hạt
 
-        # 6. Hiển thị phím tắt Q / E (nhỏ ở dưới)
-        hint_text = "[Q] PREV   [E] NEXT"
-        hint_surf = self.font.render(hint_text, True, (220, 220, 220))
-        hint_shadow = self.font.render(hint_text, True, (0, 0, 0))
-        hint_rect = hint_surf.get_rect(midtop=(center_x, center_y + slot_radius + 8))
-        screen.blit(hint_shadow, (hint_rect.x + 1, hint_rect.y + 1))
-        screen.blit(hint_surf, hint_rect)
+    def _draw_weapon_slots(self, screen):
+        from weapon import WeaponManager
+        from inventory import InventoryManager
+        from resources import ResourceManager
+        
+        manager = WeaponManager.get_instance()
+        inv = InventoryManager.get_instance()
+        
+        sw, sh = screen.get_size()
+        
+        # --- 1. VẼ 3 SLOT DỌC BÊN PHẢI (KIỂU GENSHIN) ---
+        slot_size = 50 # Thu nhỏ slot nhỏ
+        margin_right = 30
+        start_y = sh // 2 - 80
+        spacing_y = 65 # Đẩy sát nhau hơn
+        
+        for i, name in enumerate(manager.slot_names):
+            is_active = (inv.current_slot_idx == i)
+            
+            # Vị trí tâm slot nhỏ
+            cx = sw - margin_right - slot_size // 2
+            cy = start_y + i * spacing_y
+            rect = pygame.Rect(0, 0, slot_size, slot_size)
+            rect.center = (cx, cy)
+            
+            # Tên vũ khí ở bên trái slot
+            weapon = manager.weapons.get(name)
+            if weapon:
+                name_color = (255, 255, 255) if is_active else (150, 150, 150)
+                n_surf = self.font.render(weapon.name.upper(), True, name_color)
+                # Đổ bóng nhẹ
+                n_shadow = self.font.render(weapon.name.upper(), True, (0, 0, 0))
+                n_rect = n_surf.get_rect(midright=(cx - slot_size // 2 - 15, cy))
+                screen.blit(n_shadow, (n_rect.x + 1, n_rect.y + 1))
+                screen.blit(n_surf, n_rect)
+
+            # Nền slot nhỏ - CÓ VIỀN TRẮNG ĐẬM & ĐỔ BÓNG
+            pygame.draw.circle(screen, (0, 0, 0, 180), (cx + 3, cy + 3), slot_size // 2) # Shadow
+            pygame.draw.circle(screen, (70, 70, 80) if is_active else (40, 40, 45), (cx, cy), slot_size // 2)
+            
+            # Viền trắng đậm cho tất cả slot nhỏ
+            pygame.draw.circle(screen, (255, 255, 255), (cx, cy), slot_size // 2, 4 if is_active else 2)
+            
+            # Icon vũ khí nhỏ
+            if weapon:
+                tex = ResourceManager.get_instance().get_texture(weapon.texture_name)
+                if tex:
+                    tw, th = tex.get_size()
+                    # Scale vừa khít hoặc hơi tràn nhẹ (1.0x)
+                    s = (slot_size * 1.0) / max(tw, th)
+                    icon = pygame.transform.scale(tex, (int(tw * s), int(th * s)))
+                    if not is_active: icon.set_alpha(150)
+                    screen.blit(icon, icon.get_rect(center=(cx, cy)))
+            
+            # Số phím tắt [1, 2, 3]
+            key_text = f"{i+1}"
+            key_surf = self.font.render(key_text, True, (255, 255, 255))
+            screen.blit(key_surf, (rect.right - 8, rect.top - 2))
+
+        # --- 2. VẼ CỤM VŨ KHÍ ĐANG CHỌN (GÓC PHẢI DƯỚI) ---
+        active_weapon = manager.active_weapon
+        if active_weapon:
+            big_radius = 55 # Thu nhỏ slot active
+            bx = sw - big_radius - 45
+            by = sh - big_radius - 45
+            
+            # Nền bự
+            # Đổ bóng đen (Bỏ hình tròn nền theo ý ông)
+            pygame.draw.circle(screen, (0, 0, 0, 200), (bx + 5, by + 5), big_radius)
+            # Viền SIÊU ĐẬM cho Active Slot
+            pygame.draw.circle(screen, (255, 255, 255), (bx, by), big_radius, 8)
+            
+            # Icon vũ khí bự (có animation)
+            tex = ResourceManager.get_instance().get_texture(active_weapon.texture_name)
+            if tex:
+                tw, th = tex.get_size()
+                # Scale vừa phải (1.1x)
+                s = ((big_radius * 2 * 1.1) / max(tw, th)) * self.slot_scale
+                big_icon = pygame.transform.scale(tex, (int(tw * s), int(th * s)))
+                rotated_icon = pygame.transform.rotate(big_icon, self.slot_angle)
+                screen.blit(rotated_icon, rotated_icon.get_rect(center=(bx, by)))
+                
+            # Tên vũ khí bự ở bên trái - TO & RÕ HƠN
+            name_surf = self.label_font.render(active_weapon.name.upper(), True, (255, 255, 255))
+            name_surf = pygame.transform.scale(name_surf, (int(name_surf.get_width() * 0.8), int(name_surf.get_height() * 0.8)))
+            name_rect = name_surf.get_rect(midright=(bx - big_radius - 30, by))
+            
+            shadow_surf = pygame.transform.scale(self.label_font.render(active_weapon.name.upper(), True, (0, 0, 0)), (name_surf.get_size()))
+            screen.blit(shadow_surf, (name_rect.x + 2, name_rect.y + 2))
+            screen.blit(name_surf, name_rect)
+            
+            # Hint cuộn chuột nhỏ lại
+            hint_surf = self.font.render("SCROLL", True, (150, 150, 150))
+            screen.blit(hint_surf, hint_surf.get_rect(midtop=(bx, by + big_radius + 5)))
+            
+            # --- 3. VẼ BÀI TAROT (NẾU ĐANG CẦM) ---
+            if active_weapon.name == "TarotCard":
+                self._draw_card_hand(screen, active_weapon)
 
     def _draw_card_hand(self, screen, weapon):
         import math

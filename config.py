@@ -178,7 +178,7 @@ def GetAtkX2ZoneConfig():
     return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=90.0, MaxHp=1.0, knockback=50.0, damage=32.0, scaleMultiplier=1.25, hasOutline=False, canShakeCamera=True, stun_on_hit=0.2, lifetime=0.1, MinFrame=3, MaxFrame=3)
 
 def GetPoisonZoneConfig():
-    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 2, 5], hitbox_radius=110.0, MaxHp=1.0, knockback=0.0, damage=3.0, scaleMultiplier=2.0, hasOutline=False, canShakeCamera=False, stun_on_hit=0.01, lifetime=6.0, MinFrame=4, MaxFrame=4)
+    return NodeConfig(textureName="card_effect", mask=6, maskOut=[1, 5], hitbox_radius=110.0, MaxHp=1.0, knockback=0.0, damage=3.0, scaleMultiplier=2.0, hasOutline=False, canShakeCamera=False, stun_on_hit=0.01, lifetime=6.0, MinFrame=4, MaxFrame=4)
 
 
 

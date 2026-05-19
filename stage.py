@@ -91,6 +91,33 @@ class CoinOrb:
         pygame.draw.circle(screen, (255, 215, 0), (int(draw_pos.x), int(draw_pos.y)), 6 * GLOBAL_SCALE)
         pygame.draw.circle(screen, (255, 255, 100), (int(draw_pos.x), int(draw_pos.y)), 3 * GLOBAL_SCALE)
 
+class PepperOrb(CoinOrb):
+    """Orb Rock-coin (Pepper) rơi ra từ đá."""
+    def process(self, dt):
+        self.timer += dt
+        player_pos = AppleManager.GetPosition()
+        dist_sq = self.position.distance_squared_to(player_pos)
+        from settings import SettingsManager
+        is_auto_collect = SettingsManager.get_instance().get("gameplay", "auto_collect_exp")
+        magnet_dist = AppleManager.magnet_radius
+        if dist_sq < magnet_dist * magnet_dist or (self.timer > 1.0 and is_auto_collect): 
+            self.speed += 1500 * dt
+            target_dir = (player_pos - self.position).normalize() if dist_sq > 0 else pygame.math.Vector2(0, 0)
+            self.velocity = self.velocity.lerp(target_dir * self.speed, 0.2)
+        else:
+            self.velocity *= 0.9 
+        self.position += self.velocity * dt
+        if dist_sq < 40 * 40: 
+            AppleManager.add_pepper(self.value)
+            return True
+        return False
+
+    def draw(self, screen, camera):
+        draw_pos = self.position - camera
+        # Màu Xanh Băng (Ice Blue) nhạt bên ngoài và Trắng Tinh bên trong
+        pygame.draw.circle(screen, (180, 230, 255), (int(draw_pos.x), int(draw_pos.y)), 7 * GLOBAL_SCALE)
+        pygame.draw.circle(screen, (255, 255, 255), (int(draw_pos.x), int(draw_pos.y)), 4 * GLOBAL_SCALE)
+
 class StageManager:
     _instance = None
     
@@ -123,6 +150,7 @@ class StageManager:
         import config
         self.exp_orbs = []
         self.coin_orbs = []
+        self.pepper_orbs = []
         self.killed_snakes = 0
         self.current_wave = self.start_wave
         
@@ -144,10 +172,15 @@ class StageManager:
         """Sinh một orb Coin tại vị trí `pos`."""
         self.coin_orbs.append(CoinOrb(pos, value))
 
-    def on_snake_killed(self, pos, max_hp):
-        """Gọi khi rắn chết: sinh EXP tứ lệ với MaxHp, 30% cơ hội rơi 1–3 Coin, đếm số rắn giết và kiểm tra điều kiện qua Wave."""
-        # Rơi EXP tỉ lệ với máu của quái (10% MaxHp)
-        exp_value = max_hp * 0.1
+    def spawn_pepper(self, pos, value=1):
+        """Sinh một orb Rock-coin (Pepper) tại vị trí `pos`."""
+        self.pepper_orbs.append(PepperOrb(pos, value))
+
+    def on_snake_killed(self, pos, max_hp, texture_name=""):
+        """Gọi khi rắn chết: sinh EXP tứ lệ với MaxHp và độ khó hiện tại."""
+        diff = self.get_current_wave_config()["difficulty"]
+        # Rơi EXP tỉ lệ với máu và nhân với độ khó (càng khó rơi càng nhiều)
+        exp_value = max_hp * 0.1 * (1.0 + (diff - 1.0) * 0.5)
         self.spawn_exp(pos, value=int(exp_value))
         
         # Rơi Tiền (Tỉ lệ 30% rớt từ 1 đến 3 đồng)
@@ -155,6 +188,12 @@ class StageManager:
             count = random.randint(1, 3)
             for _ in range(count):
                 self.spawn_coin(pos, value=1)
+                
+        # Rơi PEPPER (Pebble) nếu là Rắn Đá
+        if texture_name == "snake_stone":
+            count = random.randint(10, 20)
+            for _ in range(count):
+                self.spawn_pepper(pos, value=1)
                 
         self.killed_snakes += 1
         self.check_flags()
@@ -178,9 +217,11 @@ class StageManager:
         # Lưu game khi qua màn
         from save_system import SaveSystem
         from apple import AppleManager
+        from inventory import InventoryManager
         SaveSystem.get_instance().save_game(
             AppleManager.username, AppleManager.exp, AppleManager.level, self.max_unlocked_wave,
-            AppleManager.hp_lvl, AppleManager.stamina_lvl, AppleManager.dmg_lvl, AppleManager.coins
+            AppleManager.hp_lvl, AppleManager.stamina_lvl, AppleManager.dmg_lvl, AppleManager.coins,
+            AppleManager.status_points, InventoryManager.get_instance().save_data(), AppleManager.pepper_coins
         )
         
     def process_and_draw(self, dt, screen, camera):
@@ -194,14 +235,15 @@ class StageManager:
         for orb in self.exp_orbs:
             orb.draw(screen, camera)
 
-        alive_coins = []
-        for orb in self.coin_orbs:
-            if not orb.process(dt):
-                alive_coins.append(orb)
-        self.coin_orbs = alive_coins
+        for c in self.coin_orbs[:]:
+            if c.process(dt): self.coin_orbs.remove(c)
+        for p in self.pepper_orbs[:]:
+            if p.process(dt): self.pepper_orbs.remove(p)
         
-        for orb in self.coin_orbs:
-            orb.draw(screen, camera)
+        for c in self.coin_orbs:
+            c.draw(screen, camera)
+        for p in self.pepper_orbs:
+            p.draw(screen, camera)
             
     def get_current_wave_config(self):
         """Trả về cấu hình của Wave hiện tại từ danh sách WAVES_DATA."""
@@ -233,10 +275,9 @@ class StageManager:
         if active_snakes_count >= config.get("max_on_screen", 15):
             return 9999.0
             
-        if self.spawned_snakes >= config["total"]:
-            # Nếu đã đẻ đủ số lượng của màn thì ngưng
-            if self.flag_huge_wave_queue <= 0:
-                return 9999.0
+        if self.spawned_snakes >= self.target_kills:
+            # Nếu đã đẻ đủ số lượng của màn (bao gồm cả bonus) thì ngưng
+            return 9999.0
                 
         if self.flag_huge_wave_queue > 0:
             return 0.1 # Đẻ liên tục rất nhanh cho Huge Wave
@@ -248,11 +289,10 @@ class StageManager:
         return rate / config["difficulty"]
         
     def notify_spawned(self):
-        """Thông báo rằng một rắn mới vừa được sinh ra, giảm số rắn trong Huge Wave queue (nếu có)."""
+        """Thông báo rằng một rắn mới vừa được sinh ra."""
+        self.spawned_snakes += 1
         if self.flag_huge_wave_queue > 0:
             self.flag_huge_wave_queue -= 1
-        else:
-            self.spawned_snakes += 1
             
     def draw_progress_bar(self, screen, dt):
         """Vẽ thanh tiến trình Wave, các cờ mốc (Flags), chữ "Wave N" lên màn hình."""

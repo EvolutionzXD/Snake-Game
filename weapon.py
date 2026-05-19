@@ -13,8 +13,10 @@ from entity import Node
 
 class Weapon:
     def __init__(self, name, config_func, texture_name="stick", fire_rate=0.2, speed=1200.0, 
-                 arm_len=20, stick_len=40, recoil=15, scale=1.5, stamina_cost=0.0, **kwargs):
+                 arm_len=20, stick_len=40, recoil=15, scale=1.5, stamina_cost=0.0, level=1, is_awakened=False, **kwargs):
         self.name = name
+        self.level = level
+        self.is_awakened = is_awakened
         self.config_func = config_func
         self.texture_name = texture_name
         self.fire_rate = fire_rate
@@ -24,6 +26,26 @@ class Weapon:
         self.stick_len = stick_len
         self.recoil_dist = recoil 
         self.stamina_cost = stamina_cost
+
+        # Lưu toàn bộ kwargs mở rộng (như damage_override) vào self
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        # Áp dụng nâng cấp từ WEAPON_CATALOG
+        from arsenal import WEAPON_CATALOG
+        if name in WEAPON_CATALOG:
+            upgrades = WEAPON_CATALOG[name].get("upgrades", {})
+            # Áp dụng cộng dồn các mốc level (hoặc lấy mốc cao nhất)
+            # Ở đây ta lấy mốc hiện tại cho đơn giản
+            for lv in range(2, level + 1):
+                if lv in upgrades:
+                    for k, v in upgrades[lv].get("kwargs_update", {}).items():
+                        setattr(self, k, v)
+            
+            # Áp dụng awakening nếu có
+            if is_awakened and "awaken" in upgrades:
+                for k, v in upgrades["awaken"].get("kwargs_update", {}).items():
+                    setattr(self, k, v)
         
         # State
         self.current_recoil = 0.0
@@ -64,13 +86,34 @@ class Gun(Weapon):
         if current_time - self.last_fire_time >= self.fire_rate:
             if AppleManager.stamina < self.stamina_cost: return False
             
+            # Bắn phát chính
             ProjectileManager.Spawn(
                 pos                = pos, 
                 target_pos         = target_pos, 
                 config_func        = self.config_func, 
                 speed              = self.speed,
-                inherited_velocity = self._get_player_momentum()
+                inherited_velocity = self._get_player_momentum(),
+                damage_override    = getattr(self, "damage_override", None)
             )
+
+            # --- AWAKENING: Bắn 2 phát (Dual Shot) ---
+            if self.is_awakened:
+                # Tính hướng lệch một chút
+                dir_vec = (pygame.math.Vector2(target_pos) - pos)
+                if dir_vec.length_squared() > 0:
+                    angle = math.degrees(math.atan2(dir_vec.y, dir_vec.x))
+                    for offset in [-10, 10]: # Bắn thêm 2 tia lệch trái phải
+                        rad = math.radians(angle + offset)
+                        new_target = pos + pygame.math.Vector2(math.cos(rad), math.sin(rad)) * 100
+                        ProjectileManager.Spawn(
+                            pos                = pos, 
+                            target_pos         = new_target, 
+                            config_func        = self.config_func, 
+                            speed              = self.speed,
+                            inherited_velocity = self._get_player_momentum(),
+                            damage_override    = getattr(self, "damage_override", None)
+                        )
+
             AppleManager.stamina -= self.stamina_cost
             self.last_fire_time = current_time
             self.current_recoil = self.recoil_dist
@@ -81,6 +124,7 @@ class Flamethrower(Gun):
     def __init__(self, name, config_func, **kwargs):
         super().__init__(name, config_func, **kwargs)
         self.is_automatic = True
+        self.shot_count = getattr(self, "shot_count", 10) # Mặc định là 10 nếu không khai báo
 
     def attack(self, manager, pos, target_pos, is_holding):
         if not is_holding: return False
@@ -98,7 +142,7 @@ class Flamethrower(Gun):
             if base_dir.length_squared() > 0:
                 base_angle = math.degrees(math.atan2(base_dir.y, base_dir.x))
                 momentum = self._get_player_momentum()
-                for _ in range(10):
+                for _ in range(int(self.shot_count)):
                     spread = random.uniform(-20, 20)
                     rad = math.radians(base_angle + spread)
                     new_dir = pygame.math.Vector2(math.cos(rad), math.sin(rad))
@@ -108,7 +152,8 @@ class Flamethrower(Gun):
                         target_pos         = proj_target, 
                         config_func        = self.config_func, 
                         speed              = self.speed * random.uniform(0.8, 1.2),
-                        inherited_velocity = momentum
+                        inherited_velocity = momentum,
+                        damage_override    = getattr(self, "damage_override", None)
                     )
                 for _ in range(random.randint(2, 4)):
                     color = random.choice([(255, 50, 0), (255, 150, 0), (255, 230, 0)])
@@ -133,6 +178,7 @@ class StandWeapon(Weapon):
         self.ghost_node = None
         self.is_near_target = False
         self.last_is_holding = False
+        self.punch_count = 0 # Đếm số cú đấm để kích hoạt ZA WARUDO
 
     def attack(self, manager, pos, target_pos, is_holding):
         self.last_is_holding = is_holding # Lưu trạng thái để update dùng
@@ -146,24 +192,38 @@ class StandWeapon(Weapon):
             if AppleManager.stamina < self.stamina_cost: return False
 
             if self.ghost_node:
-                punch_pos = self.ghost_node.position + pygame.math.Vector2(random.uniform(-30, 30), random.uniform(-30, 30))
-                
-                # Tính toán hướng đấm có độ tản 10 độ cho máu lửa
-                dir_vec = (pygame.math.Vector2(target_pos) - punch_pos)
-                if dir_vec.length_squared() > 0:
-                    base_angle = math.degrees(math.atan2(dir_vec.y, dir_vec.x))
-                    spread_angle = math.radians(base_angle + random.uniform(-10, 10))
-                    punch_target = punch_pos + pygame.math.Vector2(math.cos(spread_angle), math.sin(spread_angle)) * 100
+                # ORA ORA ORA: Nếu Awaken thì đấm 3 phát cùng lúc
+                num_punches = 3 if self.is_awakened else 1
+                for _ in range(num_punches):
+                    punch_pos = self.ghost_node.position + pygame.math.Vector2(random.uniform(-40, 40), random.uniform(-40, 40))
                     
-                    ProjectileManager.Spawn(
-                        pos                = punch_pos, 
-                        target_pos         = punch_target, 
-                        config_func        = GetGhostPunchConfig, 
-                        speed              = random.uniform(2000, 2600), # Tốc độ đấm biến thiên
-                        inherited_velocity = self._get_player_momentum() * 0.2,
-                        alpha_override     = 180
-                    )
+                    # Tính toán hướng đấm
+                    dir_vec = (pygame.math.Vector2(target_pos) - punch_pos)
+                    if dir_vec.length_squared() > 0:
+                        base_angle = math.degrees(math.atan2(dir_vec.y, dir_vec.x))
+                        spread_angle = math.radians(base_angle + random.uniform(-10, 10))
+                        punch_target = punch_pos + pygame.math.Vector2(math.cos(spread_angle), math.sin(spread_angle)) * 100
+                        
+                        ProjectileManager.Spawn(
+                            pos                = punch_pos, 
+                            target_pos         = punch_target, 
+                            config_func        = GetGhostPunchConfig, 
+                            speed              = random.uniform(2000, 3000) if self.is_awakened else random.uniform(2000, 2600),
+                            inherited_velocity = self._get_player_momentum() * 0.2,
+                            alpha_override     = 180,
+                            damage_override    = getattr(self, "damage_override", None)
+                        )
                 
+                # --- XỬ LÝ ZA WARUDO ---
+                if self.is_awakened:
+                    from effects import EffectManager
+                    # CHỈ TÍNH khi thời gian KHÔNG đang dừng
+                    if EffectManager.get_instance().time_stop_timer <= 0:
+                        self.punch_count += num_punches
+                        if self.punch_count >= 200:
+                            self._trigger_za_warudo()
+                            self.punch_count = 0
+
                 if random_func() < 0.6:
                     aura_pos = self.ghost_node.position + pygame.math.Vector2(random.uniform(-40, 40), random.uniform(-40, 40))
                     ParticleManager.get_instance().spawn_directional(
@@ -178,6 +238,37 @@ class StandWeapon(Weapon):
             self.last_fire_time = current_time
             return True
         return False
+
+    def _trigger_za_warudo(self):
+        """Kích hoạt dừng thời gian: Đóng băng mọi thứ nma cho phép rắn vẫn bắn đạn."""
+        from effects import EffectManager, CameraShake
+        from particle import ParticleManager
+        
+        # Hiệu ứng thị giác & Rung màn hình
+        EffectManager.get_instance().trigger_time_stop(15.0) # Dừng trong 15 giây
+        CameraShake.get_instance().add_trauma(1.0)
+        
+        # --- HIỆU ỨNG VÒNG TRÒN NĂNG LƯỢNG ---
+        pm = ParticleManager.get_instance()
+        for i in range(0, 360, 10): # 36 hạt tỏa ra các hướng
+            pm.spawn_directional(
+                pos             = self.ghost_node.position,
+                direction_angle = i,
+                count           = 1,
+                color           = (200, 220, 255),
+                alpha           = 255,
+                size_range      = (20, 45),    # Hạt to xỉu như bạn muốn
+                speed_range     = (600, 1000), # Bay cực nhanh tạo sóng xung kích
+                spread_deg      = 2,
+                lifetime        = 0.6,
+                gravity         = 0.0
+            )
+
+        # BỎ STUN: Để rắn vẫn có thể bắn đạn (nma đạn sẽ đứng yên)
+        from entity import active_nodes
+        for node in active_nodes:
+            if node.mask == 1:
+                node.flashEffect = 0.6
 
     def update(self, manager, dt):
         super().update(manager, dt)
@@ -216,7 +307,10 @@ class StandWeapon(Weapon):
         dist_sq = dist_vec.length_squared()
         self.is_near_target = dist_sq < 10000 # < 100 pixel là coi như đã tới vị trí "sẵn sàng"
         
+        # AWAKEN: Bay nhanh hơn để ORA ORA cho kịp
         move_speed = 12 if self.last_is_holding else 6
+        if self.is_awakened: move_speed *= 1.8
+        
         self.ghost_node.position += dist_vec * move_speed * dt
         
         self.ghost_node.scaleMultiplier = 0.8 # Nhỏ hơn xíu theo ý bạn
@@ -242,6 +336,7 @@ class Sword(Weapon):
         self.swing_progress = 0.0
         self.sword_spawns_done = 0
         self.charge_values = {"kb": 0, "stun": 0, "dmg": 0}
+        self.last_charge_duration = 0.0 # Lưu thời gian gồng của cú đánh gần nhất
 
     def attack(self, manager, pos, target_pos, is_holding):
         current_time = time.time()
@@ -259,9 +354,18 @@ class Sword(Weapon):
         else:
             if self.is_charging:
                 charge_dur = current_time - self.charge_start_time
-                self.charge_values["kb"] = min(400 + (charge_dur * 2300), 3000)
-                self.charge_values["stun"] = min(0.5 + (charge_dur * 0.5), 1.5)
-                self.charge_values["dmg"] = min(10 + (charge_dur * 30), 90)
+                self.last_charge_duration = charge_dur # Lưu lại để kiểm tra điều kiện triệu hồi zone
+                
+                if self.is_awakened:
+                    # AWAKEN: Sát thương cực đại 800 (đạt được trong 2s gồng)
+                    self.charge_values["kb"] = min(800 + (charge_dur * 4600), 10000)
+                    self.charge_values["stun"] = min(1.0 + (charge_dur * 2.0), 5.0)
+                    self.charge_values["dmg"] = min(20 + (charge_dur * 390), 800)
+                else:
+                    # Thông số bình thường
+                    self.charge_values["kb"] = min(400 + (charge_dur * 2300), 3000)
+                    self.charge_values["stun"] = min(0.5 + (charge_dur * 0.5), 1.5)
+                    self.charge_values["dmg"] = min(10 + (charge_dur * 30), 90)
                 self.is_charging = False
                 self.last_fire_time = current_time
                 self.swing_progress = 0.89 
@@ -308,7 +412,9 @@ class Sword(Weapon):
         spawn_pos = manager.last_player_pos + dir_vec * 60
         target = spawn_pos + dir_vec * 100
         momentum = self._get_player_momentum() * 0.5
-        proj = ProjectileManager.Spawn(
+        
+        # Vết chém chính
+        ProjectileManager.Spawn(
             pos                = spawn_pos, 
             target_pos         = target, 
             config_func        = self.config_func, 
@@ -319,6 +425,40 @@ class Sword(Weapon):
             lifetime_override  = 0.04,
             inherited_velocity = momentum
         )
+
+        # --- AWAKENING: STORM KING ---
+        if self.is_awakened:
+            # 1. Thêm một lớp kiếm khí ở xa hơn (Outer Layer) - BẮN 3 TIA HÌNH QUẠT
+            for angle_offset in [-15, 0, 15]:
+                rad_outer = math.radians(manager.last_final_angle + angle_offset)
+                dir_outer = pygame.math.Vector2(math.cos(rad_outer), math.sin(rad_outer))
+                
+                outer_spawn_pos = manager.last_player_pos + dir_outer * 155
+                outer_target = outer_spawn_pos + dir_outer * 100
+                ProjectileManager.Spawn(
+                    pos                = outer_spawn_pos, 
+                    target_pos         = outer_target, 
+                    config_func        = self.config_func, 
+                    speed              = self.speed,
+                    knockback_override = self.charge_values["kb"] * 0.4, 
+                    stun_override      = self.charge_values["stun"], 
+                    damage_override    = self.charge_values["dmg"] * 0.4, 
+                    lifetime_override  = 0.04,
+                    inherited_velocity = momentum
+                )
+
+            # 2. Triệu hồi Vùng Đỏ (AtkX2 Zone) RA XA - CHỈ KHI GỒNG ĐỦ 1S
+            if self.last_charge_duration >= 1.0:
+                from config import GetAtkX2ZoneConfig
+                zone_pos = manager.last_player_pos + dir_vec * 220
+                ProjectileManager.Spawn(
+                    pos                = zone_pos,
+                    target_pos         = zone_pos,
+                    config_func        = GetAtkX2ZoneConfig,
+                    speed              = 0.0,
+                    inherited_velocity = momentum * 0.1
+                )
+
         ratio = min(self.charge_values["kb"] / 3000, 1.0)
         color = (int(180 + ratio*75), int(210 + ratio*45), 255)
         ParticleManager.get_instance().spawn_directional(pos=spawn_pos, direction_angle=manager.last_final_angle, count=int(4+ratio*8), color=color, alpha=int(180+ratio*75), size_range=(2,6), speed_range=(80,200), spread_deg=50, lifetime=0.25, gravity=150.0)
@@ -327,6 +467,8 @@ class FlameExtinguisher(Gun):
     def __init__(self, name, config_func, **kwargs):
         super().__init__(name, config_func, **kwargs)
         self.is_automatic = True
+        self.stun_override = getattr(self, "stun_override", None)
+        self.damage_override = getattr(self, "damage_override", None)
 
     def attack(self, manager, pos, target_pos, is_holding):
         if not is_holding: return False
@@ -354,6 +496,8 @@ class FlameExtinguisher(Gun):
                         target_pos         = proj_target, 
                         config_func        = self.config_func, 
                         speed              = self.speed * random.uniform(0.8, 1.2),
+                        stun_override      = self.stun_override,
+                        damage_override    = self.damage_override,
                         inherited_velocity = momentum
                     )
                 for _ in range(random.randint(2, 4)):
@@ -382,6 +526,11 @@ class TarotCardWeapon(Weapon):
         self.active_dummies = []
         self.is_automatic = False
         self.is_visible = True
+        
+        # --- LOGIC LUCKY DRAW (AWAKEN) ---
+        self.jackpot_timer = 0.0
+        self.last_card_type = -1
+        self.match_count = 1
 
     def update(self, manager, dt):
         super().update(manager, dt)
@@ -391,14 +540,32 @@ class TarotCardWeapon(Weapon):
             self.card_reload_timer -= dt
             if self.card_reload_timer <= 0:
                 self.card_reload_timer = self.card_reload_delay
-                self.hand.append(random.randint(0, 4)) # 5 loại bài
+                # Tăng xác suất trúng thưởng khi đang Jackpot (thêm 40% cơ hội ép ra bài trùng)
+                is_jackpot = self.jackpot_timer > 0
+                if is_jackpot and len(self.hand) > 0 and random.random() < 0.6:
+                    new_card = random.choice(self.hand) # Chọn ngẫu nhiên một lá đang có trong tay để tăng tỉ lệ trùng
+                else:
+                    new_card = random.randint(0, 4)
+                
+                # --- KIỂM TRA BÀI TRÙNG TRONG TOÀN BỘ TAY BÀI (HÀO PHÓNG) ---
+                if self.is_awakened:
+                    occurences = self.hand.count(new_card)
+                    if occurences == 1: # Đã có 1 lá -> giờ là 2 lá (Lucky Pair)
+                        from apple import AppleManager
+                        self._trigger_lucky_pair(AppleManager.GetPosition())
+                    elif occurences == 2: # Đã có 2 lá -> giờ là 3 lá (Jackpot)
+                        self._trigger_jackpot_start()
+                
+                self.hand.append(new_card)
                 
         # Xử lý các lá bài đang bay (dummy)
         alive_dummies = []
+        is_jackpot = self.jackpot_timer > 0
         for dummy, card_type in self.active_dummies:
             # Trigger khi lá bài "chết" (Hp <= 0 hoặc is_dead) hoặc khi nó bay chậm lại
             if dummy.Hp <= 0 or dummy.is_dead or dummy.velocity.length_squared() < 10000:
-                self.trigger_card_effect(dummy.position, card_type)
+                # Nếu đang Jackpot, giảm tối đa số lượng hạt (0.2) để bắn được nhiều đạn mà không lag
+                self.trigger_card_effect(dummy.position, card_type, particle_mult=0.2 if is_jackpot else 1.0)
                 dummy.Hp = 0 
                 dummy.is_dead = True
             else:
@@ -409,7 +576,25 @@ class TarotCardWeapon(Weapon):
         # Ẩn vũ khí khi đang có bài bay
         self.is_visible = (len(self.active_dummies) == 0)
 
-    def trigger_card_effect(self, pos, card_type):
+        # --- LOGIC JACKPOT (SPAM 6 HƯỚNG) ---
+        if self.jackpot_timer > 0:
+            self.jackpot_timer -= dt
+            from apple import AppleManager
+            # Buff bất tử & vô hạn Stamina
+            if AppleManager.apple_node:
+                AppleManager.apple_node.invincibility = 0.5
+                AppleManager.stamina = AppleManager.max_stamina
+            
+            # Spam đạn 12 hướng liên tục (mỗi 0.4s một lần - rất nhanh)
+            if int(self.jackpot_timer / 0.4) != int((self.jackpot_timer + dt) / 0.4):
+                self._trigger_jackpot_spam(manager)
+
+            # Khi hết thời gian Jackpot, trả lại chỉ số cũ
+            if self.jackpot_timer <= 0:
+                AppleManager.jackpot_stat_bonus = 0
+                AppleManager.recalculate_stats()
+
+    def trigger_card_effect(self, pos, card_type, particle_mult=1.0):
         from config import (GetAtkZoneConfig, GetTeleportZoneConfig, GetIceZoneConfig, 
                             GetAtkX2ZoneConfig, GetPoisonZoneConfig)
         
@@ -426,9 +611,10 @@ class TarotCardWeapon(Weapon):
         
         # --- HIỆU ỨNG PARTICLE ĐẶC TRƯNG ---
         if card_type == 0: # atk
-            ParticleManager.get_instance().spawn(pos=pos, count=20, color=(255, 50, 50), alpha=200, size_range=(5, 10), speed_range=(100, 300), lifetime=0.5, gravity=0)
+            ParticleManager.get_instance().spawn(pos=pos, count=int(20 * particle_mult), color=(255, 50, 50), alpha=200, size_range=(5, 10), speed_range=(100, 300), lifetime=0.5, gravity=0)
         elif card_type == 1: # teleport
             if AppleManager.apple_node:
+                # ... (logic mồi nhử giữ nguyên)
                 loot = Node(AppleManager.apple_node.position)
                 loot.textureName = "apple_ghost"
                 loot.knockback_resistance = 0.2
@@ -444,20 +630,17 @@ class TarotCardWeapon(Weapon):
                 from entity import active_nodes
                 active_nodes.append(loot)
                 AppleManager.apple_node.position = pos.copy()
-            ParticleManager.get_instance().spawn(pos=pos, count=25, color=(180, 50, 255), alpha=200, size_range=(6, 12), speed_range=(150, 400), lifetime=0.6, gravity=0)
+            ParticleManager.get_instance().spawn(pos=pos, count=int(25 * particle_mult), color=(180, 50, 255), alpha=200, size_range=(6, 12), speed_range=(150, 400), lifetime=0.6, gravity=0)
         elif card_type == 2: # ice
-            ParticleManager.get_instance().spawn(pos=pos, count=40, color=(100, 220, 255), alpha=200, size_range=(5, 10), speed_range=(50, 250), lifetime=0.8, gravity=0)
+            ParticleManager.get_instance().spawn(pos=pos, count=int(40 * particle_mult), color=(100, 220, 255), alpha=200, size_range=(5, 10), speed_range=(50, 250), lifetime=0.8, gravity=0)
         elif card_type == 3: # atk x 2
-            ParticleManager.get_instance().spawn(pos=pos, count=40, color=(255, 20, 20), alpha=220, size_range=(8, 15), speed_range=(200, 500), lifetime=0.7, gravity=0)
+            ParticleManager.get_instance().spawn(pos=pos, count=int(40 * particle_mult), color=(255, 20, 20), alpha=220, size_range=(8, 15), speed_range=(200, 500), lifetime=0.7, gravity=0)
         elif card_type == 4: # poison
-            # Tạo "Sương mù độc" phủ kín toàn bộ Radius để người chơi nhận biết
+            # Tạo "Sương mù độc" phủ kín toàn bộ Radius
             pm = ParticleManager.get_instance()
-            # Thực tế bán kính va chạm là hitbox_radius * scaleMultiplier
             effective_radius = zone.hitbox_radius * zone.scaleMultiplier
-            # Tăng số lượng hạt và rải đều khắp diện tích (dùng sqrt để rải đều ra rìa)
-            for _ in range(120):
+            for _ in range(int(100 * particle_mult)):
                 angle = random.uniform(0, 2 * math.pi)
-                # Math: dist = R * sqrt(random) để các hạt rải đều theo diện tích hình tròn
                 dist = effective_radius * math.sqrt(random.random())
                 p_pos = pos + pygame.math.Vector2(math.cos(angle) * dist, math.sin(angle) * dist)
                 pm.spawn(
@@ -501,12 +684,72 @@ class TarotCardWeapon(Weapon):
             return True
         return False
 
+    def _trigger_lucky_pair(self, pos):
+        """Hồi phục và bắn 4 hướng khi trúng 2 lá giống nhau."""
+        from apple import AppleManager
+        from effects import EffectManager
+        # Hồi phục
+        if AppleManager.apple_node:
+            AppleManager.apple_node.Hp = AppleManager.apple_node.MaxHp
+            AppleManager.stamina = AppleManager.max_stamina
+        
+        # Hiện chữ (To hơn)
+        EffectManager.get_instance().trigger_text_popup("2 OF 3", pos, color=(255, 255, 100), is_large=True)
+        # Thông báo hồi phục cụ thể
+        EffectManager.get_instance().trigger_text_popup("FULL HP & STAMINA RESTORED", pos + pygame.math.Vector2(0, 80), color=(100, 255, 100))
+        
+        # Bắn 6 hướng siêu tốc
+        for i in range(6):
+            angle = i * 60
+            rad = math.radians(angle)
+            target = pos + pygame.math.Vector2(math.cos(rad) * 100, math.sin(rad) * 100)
+            from config import GetCardDummyConfig
+            dummy = ProjectileManager.Spawn(pos, target, config_func=GetCardDummyConfig, speed=self.speed)
+            # Dùng card_type của lá bài vừa kích hoạt lucky pair
+            card_type = self.hand[-1] if self.hand else random.randint(0, 4)
+            self.active_dummies.append((dummy, card_type))
+
+    def _trigger_jackpot_start(self):
+        """Kích hoạt trạng thái Jackpot 15 giây."""
+        from effects import EffectManager, CameraShake
+        from apple import AppleManager
+        self.jackpot_timer = 15.0
+        # Tăng chỉ số tạm thời
+        AppleManager.jackpot_stat_bonus += 5
+        AppleManager.recalculate_stats()
+        
+        EffectManager.get_instance().trigger_text_popup("JACKPOT!!!", AppleManager.GetPosition(), color=(255, 50, 255), is_large=True)
+        CameraShake.get_instance().add_trauma(1.0)
+
+    def _trigger_jackpot_spam(self, manager):
+        """Spam đạn 6 hướng tỏa tròn."""
+        from apple import AppleManager
+        pos = AppleManager.GetPosition()
+        for i in range(6): # Quay về 6 hướng
+            angle = i * 60 + (time.time() * 50) 
+            rad = math.radians(angle)
+            target = pos + pygame.math.Vector2(math.cos(rad) * 100, math.sin(rad) * 100)
+            from config import GetCardDummyConfig
+            # Giữ speed 0.6x cho hoành tráng
+            dummy = ProjectileManager.Spawn(pos, target, config_func=GetCardDummyConfig, speed=self.speed * 0.6)
+            # Chọn card_type ngẫu nhiên cho đạn spam, loại bỏ loại 1 (Teleport)
+            self.active_dummies.append((dummy, random.choice([0, 2, 3, 4])))
+
+    def on_unequip(self):
+        if self.jackpot_timer > 0:
+            from apple import AppleManager
+            AppleManager.jackpot_stat_bonus = 0
+            AppleManager.recalculate_stats()
+            self.jackpot_timer = 0
+
 class RealitySlash(Weapon):
     def __init__(self, name, config_func, **kwargs):
         super().__init__(name, config_func, **kwargs)
         self.start_pos = None
         self.is_aiming = False
-        self.active_slashes = [] # Lưu danh sách nhát chém đang hiển thị
+        self.active_slashes = [] 
+        self.free_slash = getattr(self, "free_slash", 0) 
+        self.chaos_radius = getattr(self, "chaos_radius", 100) # Mặc định là 100 nếu không có
     
     def attack(self, manager, pos, target_pos, is_holding):
         current_mouse = pygame.math.Vector2(target_pos)
@@ -521,24 +764,41 @@ class RealitySlash(Weapon):
             return False
         else:
             if self.is_aiming:
+                # Vết chém chính
                 self._trigger_slash(self.start_pos, current_mouse)
-                # Thêm hiệu ứng animation vào danh sách
                 self.active_slashes.append({
-                    'start': self.start_pos,
-                    'end': current_mouse,
-                    'life': 0.25, # Thời gian tồn tại (giây)
-                    'max_life': 0.25
+                    'start': self.start_pos, 'end': current_mouse,
+                    'life': 0.25, 'max_life': 0.25, 'is_free': False
                 })
+                
+                # Các vết chém phụ (Free Slashes)
+                for _ in range(int(self.free_slash)):
+                    offset = self.chaos_radius # Sử dụng biến chaos_radius thay vì fix cứng 100
+                    f_start = self.start_pos + pygame.math.Vector2(random.uniform(-offset, offset), random.uniform(-offset, offset))
+                    f_end = current_mouse + pygame.math.Vector2(random.uniform(-offset, offset), random.uniform(-offset, offset))
+                    
+                    self._trigger_slash(f_start, f_end, damage_multiplier=0.25)
+                    self.active_slashes.append({
+                        'start': f_start, 'end': f_end,
+                        'life': 0.18, 'max_life': 0.18, 'is_free': True
+                    })
+
                 AppleManager.stamina -= self.stamina_cost
                 self.is_aiming = False
                 self.start_pos = None
                 return True
         return False
 
-    def _trigger_slash(self, start_pos, end_pos):
+    def _trigger_slash(self, start_pos, end_pos, damage_multiplier=1.0):
         dist_vec = end_pos - start_pos
         length = dist_vec.length()
         if length < 10: return
+        
+        # Lấy damage gốc từ config để nhân tỉ lệ (cho các vết chém phụ)
+        damage_override = None
+        if damage_multiplier != 1.0:
+            base_config = self.config_func()
+            damage_override = base_config.damage * damage_multiplier
       
         steps = int(length / 20) + 1
         for i in range(steps):
@@ -550,6 +810,7 @@ class RealitySlash(Weapon):
                 speed              = 0,
                 inherited_velocity = pygame.math.Vector2(0, 0),
                 alpha_override     = 0,
+                damage_override    = damage_override,
                 lifetime_override  = 0.1
             )
             
@@ -590,8 +851,10 @@ class RealitySlash(Weapon):
                 
                 if dist_vec.length_squared() > 10:
                     perp = pygame.math.Vector2(-dist_vec.y, dist_vec.x).normalize()
-                    # Giảm độ dày xuống 0.8 (từ 20 xuống khoảng 12-14)
-                    max_w = ((14 * progress) + 1.5) * GLOBAL_SCALE
+                    
+                    # Nếu là vết chém phụ thì vẽ mỏng hơn
+                    thickness_mult = 0.4 if s.get('is_free', False) else 1.0
+                    max_w = ((14 * progress) + 1.5) * GLOBAL_SCALE * thickness_mult
                     
                     # Vẽ 2 lớp để tránh bị sọc: Hào quang đỏ và Lõi đen
                     # 1. Hào quang đỏ thẫm (Mờ và Rộng)
@@ -636,39 +899,67 @@ class WeaponManager:
         return cls._instance
 
     def __init__(self):
-        self.weapons = {
-            "Pistol": Gun("Pistol", GetProjectileConfig, texture_name="pistol", fire_rate=0.4, speed=4000.0, arm_len=5, stick_len=30, scale=2, stamina_cost=0.0),
-            "SMG": Gun("SMG", GetProjectileConfig, texture_name="stick", is_automatic=True, fire_rate=0.08, speed=1500.0, arm_len=2, stick_len=25, recoil=10, scale=1.2, stamina_cost=1.5),
-            "AirSword": Sword("AirSword", GetSwordAirDashConfig, texture_name="stick", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=20.0),
-            "FlameThrower": Flamethrower("FlameThrower", GetFlameConfig, texture_name="flame_thrower", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
-            "StarPlatinum": StandWeapon("StarPlatinum", GetGhostPunchConfig, texture_name="stick", fire_rate=0.04, speed=0.0, arm_len=0, stick_len=0, recoil=0, scale=0.8, stamina_cost=2.0),
-            "FlameExtinguisher": FlameExtinguisher("FlameExtinguisher", GetFoamConfig, texture_name="fire_extinquisher", fire_rate=0.03, speed=2000.0, arm_len=10, stick_len=30, recoil=2, scale=1.8, stamina_cost=0.5),
-            "RealitySlash": RealitySlash("RealitySlash", GetSlashConfig, texture_name="RealitySlash", fire_rate=0.5, speed=0.0, arm_len=2, stick_len=50, recoil=0, scale=2.5, stamina_cost=35.0),
-            "TarotCard": TarotCardWeapon("TarotCard", GetProjectileConfig, texture_name="card", fire_rate=0.3, speed=1800.0, arm_len=15, stick_len=30, recoil=5, scale=3.0, stamina_cost=15.0)
-        }
-        self.active_weapon = self.weapons["Pistol"]
+        self.weapons = {} # Lưu trữ các instance vũ khí thực tế
+        self.slot_names = [] # Tên 3 vũ khí trong slot
+        
         self.angle = 0 
         self.last_final_angle = 0
         self.last_player_pos = pygame.math.Vector2(0,0)
         self.last_camera = pygame.math.Vector2(0,0)
+        
+        self.active_weapon = None
+        # Khởi tạo súng sẽ được gọi sau khi Inventory đã nạp data
+
+    def initialize_loadout(self):
+        """Khởi tạo 3 instance vũ khí dựa trên Inventory Loadout."""
+        from inventory import InventoryManager
+        from arsenal import WEAPON_CATALOG
+        
+        inv = InventoryManager.get_instance()
+        self.slot_names = inv.get_equipped_list()
+        self.weapons = {}
+        
+        for name in self.slot_names:
+            if name in WEAPON_CATALOG:
+                data = WEAPON_CATALOG[name]
+                level = inv.get_level(name)
+                is_awakened = inv.is_awakened(name)
+                # Khởi tạo instance: Class(*args, level=level, is_awakened=is_awakened, **kwargs)
+                self.weapons[name] = data["class"](*data["args"], level=level, is_awakened=is_awakened, **data["kwargs"])
+        
+        # Đặt vũ khí mặc định từ slot hiện tại của Inventory
+        active_id = inv.get_active_weapon_id()
+        self.active_weapon = self.weapons.get(active_id, list(self.weapons.values())[0])
+
+    def switch_to_slot(self, slot_idx):
+        """Chuyển vũ khí theo index của slot (0, 1, 2)."""
+        if 0 <= slot_idx < len(self.slot_names):
+            from inventory import InventoryManager
+            inv = InventoryManager.get_instance()
+            inv.current_slot_idx = slot_idx
+            
+            name = self.slot_names[slot_idx]
+            if name in self.weapons:
+                if self.active_weapon == self.weapons[name]: return
+                
+                self.active_weapon.on_unequip()
+                if hasattr(self.active_weapon, "is_charging"):
+                    self.active_weapon.is_charging = False
+                    
+                self.active_weapon = self.weapons[name]
 
     def switch_weapon(self, name):
-        if name in self.weapons:
-            if self.active_weapon == self.weapons[name]: return # Tránh reset nếu là cùng 1 vũ khí
-            self.active_weapon.on_unequip()
-            if hasattr(self.active_weapon, "is_charging"):
-                self.active_weapon.is_charging = False
-            self.active_weapon = self.weapons[name]
+        """Chuyển vũ khí theo tên (tìm trong loadout)."""
+        if name in self.slot_names:
+            idx = self.slot_names.index(name)
+            self.switch_to_slot(idx)
 
     def cycle_weapon(self, direction):
-        # Lấy danh sách tên vũ khí theo thứ tự đã định nghĩa
-        names = list(self.weapons.keys())
-        current_name = self.active_weapon.name
-        if current_name in names:
-            current_index = names.index(current_name)
-            # direction > 0: Next, direction < 0: Previous
-            new_index = (current_index + direction) % len(names)
-            self.switch_weapon(names[new_index])
+        """Cuộn vũ khí trong 3 slot."""
+        from inventory import InventoryManager
+        inv = InventoryManager.get_instance()
+        new_idx = (inv.current_slot_idx + direction) % len(self.slot_names)
+        self.switch_to_slot(new_idx)
 
     def attack(self, pos, target_pos, is_holding=False):
         self.last_player_pos = pos

@@ -23,17 +23,19 @@ class SaveSystem:
         slot = slot_num if slot_num is not None else self.current_slot
         return os.path.join(self.save_dir, f"save_{slot}.json")
 
-    def save_game(self, username, exp, level, unlocked_wave, hp_lvl, stamina_lvl, dmg_lvl, coins=0, status_points=0):
+    def save_game(self, username, exp, level, max_wave, hp_lvl, stamina_lvl, dmg_lvl, coins, status_points, inventory_data, pepper_coins=0):
         data = {
             "username": username,
             "exp": exp,
             "level": level,
-            "unlocked_wave": unlocked_wave,
+            "unlocked_wave": max_wave,
             "hp_lvl": hp_lvl,
             "stamina_lvl": stamina_lvl,
             "dmg_lvl": dmg_lvl,
             "coins": coins,
-            "status_points": status_points
+            "pepper_coins": pepper_coins,
+            "status_points": status_points,
+            "inventory": inventory_data
         }
         with open(self.get_save_path(), "w") as f:
             json.dump(data, f)
@@ -71,9 +73,19 @@ class SaveSystem:
             "exp": 0,
             "level": 1,
             "unlocked_wave": 1,
-            "max_hp_bonus": 0.0,
-            "max_stamina_bonus": 0.0,
-            "damage_mult": 1.0
+            "hp_lvl": 0,
+            "stamina_lvl": 0,
+            "dmg_lvl": 0,
+            "coins": 0,
+            "status_points": 0,
+            "inventory": {
+                "weapons": {
+                    "Pistol": 1, "SMG": 1, "AirSword": 1, 
+                    "FlameThrower": 0, "StarPlatinum": 0, 
+                    "FlameExtinguisher": 0, "RealitySlash": 0, "TarotCard": 0
+                },
+                "equipped": ["Pistol", "SMG", "AirSword"]
+            }
         }
 
     def delete_save(self, slot_num):

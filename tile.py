@@ -115,8 +115,10 @@ class EnvironmentalManager:
 
             # Chọn Frame cho Đá (Easter Egg siêu hiếm ở Frame 3)
             rock_hash = (gx * 97 + gy * 43) % 100
-            if rock_hash < 2: # Tỉ lệ 2% ra Easter Egg
+            if rock_hash < 2: # Tỉ lệ 2% ra Đá Siêu Hiếm
                 rock_frame = 3
+                obj.MaxHp = 100000.0
+                obj.Hp = 100000.0
             else:
                 rock_frame = rock_hash % 3 # Tỉ lệ 98% chia đều cho 3 frame đầu
             
@@ -183,25 +185,35 @@ class EnvironmentalManager:
                         lifetime=0.6, gravity=400.0,
                     )
                     
-                    # RƠI ĐỒ: Chỉ áp dụng cho bụi cây
+                    # RƠI ĐỒ: Bụi cây rơi EXP/Coin, Đá rơi Pepper (Rock-coin)
                     if is_bush:
                         from stage import StageManager
                         StageManager.get_instance().spawn_exp(obj.position, value=5)
-
-                        # Rơi Apple Coin (xác suất 25%) - Dùng làm tiền tệ
                         if random.random() < 0.25:
                             StageManager.get_instance().spawn_coin(obj.position, value=1)
-                            
-                        # ĐỒNG THỜI rơi Táo vật lý (xác suất 25%) - Dùng làm mồi nhử đánh lạc hướng rắn
+                        # ĐỒNG THỜI rơi Táo vật lý (xác suất 25%)
                         if random.random() < 0.25:
                             loot = Node(obj.position.copy())
                             loot.textureName = "apple"
                             loot.scaleMultiplier = 0.5
-                            loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2 # mask 2 giúp nó được nhận diện như Player
-                            loot.lifetime = 15.0 # Mồi nhử sẽ tự hỏng sau 15 giây
+                            loot.MaxHp = 1.0; loot.Hp = 1.0; loot.mask = 2
+                            loot.lifetime = 15.0
                             loot.velocity = pygame.math.Vector2(random.uniform(-150, 150), random.uniform(-150, 150))
                             from entity import active_nodes
                             active_nodes.append(loot)
+                    else:
+                        # RƠI PEPPER (ROCK-COIN) TỪ ĐÁ
+                        from stage import StageManager
+                        is_rare_rock = obj.MinFrame == 3
+                        if is_rare_rock:
+                            # Đá 100k HP rơi siêu nhiều Pepper (từ 50-100 viên)
+                            count = random.randint(50, 100)
+                            for _ in range(count):
+                                StageManager.get_instance().spawn_pepper(obj.position, value=1)
+                        elif random.random() < 0.5: # Đá thường 50% xác suất rơi
+                            count = random.randint(3, 10)
+                            for _ in range(count):
+                                StageManager.get_instance().spawn_pepper(obj.position, value=1)
                 
                 self.on_object_broken(obj)
                 continue

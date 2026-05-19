@@ -1,0 +1,18 @@
+{
+    "video": {
+        "show_fps": true,
+        "show_hitbox": true,
+        "show_grid": false,
+        "screen_shake": true,
+        "particles": true
+    },
+    "gameplay": {
+        "auto_collect_exp": false,
+        "show_damage_numbers": true
+    },
+    "audio": {
+        "master_volume": 1.0,
+        "sfx_volume": 1.0,
+        "bgm_volume": 0.5
+    }
+}

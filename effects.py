@@ -89,6 +89,39 @@ class DamageNumber:
         screen.blit(text_outline, (rect.x + off, rect.y + off))
         screen.blit(text, rect)
 
+class TextPopup:
+    def __init__(self, text, pos, color, is_large=False):
+        from resources import ResourceManager
+        self.text = text
+        self.position = pygame.math.Vector2(pos)
+        self.color = color
+        self.lifetime = 1.5
+        self.max_lifetime = 1.5
+        self.font = ResourceManager.get_instance().get_font("GrapeSoda", 100 if is_large else 45)
+        self.vel = pygame.math.Vector2(0, -250) # Chữ bay nhanh lên trên
+        
+    def update(self, dt):
+        self.lifetime -= dt
+        self.position += self.vel * dt
+        self.vel.y *= 0.95 # Giảm tốc dần
+        return self.lifetime > 0
+        
+    def draw(self, screen, camera):
+        alpha = int((self.lifetime / self.max_lifetime) * 255)
+        text_surf = self.font.render(self.text, True, self.color)
+        text_surf.set_alpha(alpha)
+        
+        center = pygame.math.Vector2(600, 400)
+        target = camera + center
+        pos = (self.position - target) * GLOBAL_SCALE + center
+        rect = text_surf.get_rect(center=(pos.x, pos.y))
+        
+        # Vẽ bóng đổ cho chữ
+        shadow = self.font.render(self.text, True, (0, 0, 0))
+        shadow.set_alpha(alpha)
+        screen.blit(shadow, (rect.x + 3, rect.y + 3))
+        screen.blit(text_surf, rect)
+
 class EffectManager:
     _instance = None
     
@@ -97,10 +130,12 @@ class EffectManager:
         if cls._instance is None:
             cls._instance = EffectManager()
         return cls._instance
-        
     def __init__(self):
         self.damage_numbers = []
+        self.text_popups = [] # Danh sách thông báo chữ
+        self.jackpot_aura_particles = [] # Danh sách hạt lửa jackpot
         self.hitstop_timer = 0.0 # Thời gian khựng hình
+        self.time_stop_timer = 0.0 # Thời gian dừng thời gian
         
     def add_damage_number(self, pos, amount, color=(255, 255, 10), size=30):
         """Sinh một số sát thương bay lên tại vị trí `pos` (chỉ hiển thị nếu cài đặt bật)."""
@@ -113,20 +148,109 @@ class EffectManager:
         """Làm game dừng lại trong duration giây"""
         self.hitstop_timer = duration
 
+    def trigger_time_stop(self, duration):
+        """Kích hoạt hiệu ứng dừng thời gian (ZA WARUDO)"""
+        self.time_stop_timer = duration
+
+    def trigger_text_popup(self, text, pos, color=(255, 255, 255), is_large=False):
+        """Hiện thông báo chữ (ví dụ 2 OF 3) trên màn hình."""
+        self.text_popups.append(TextPopup(text, pos, color, is_large))
+
     def is_hitstopping(self):
         """Trả về True nếu hiện đang trong trạng thái khựng hình (hitstop_timer > 0)."""
         return self.hitstop_timer > 0
 
     def update_and_draw(self, dt, screen, camera):
-        """Cập nhật bộ đếm HitStop và vẽ các số sát thương đang bay lên màn hình."""
-        # Update hitstop timer
+        """Cập nhật bộ đếm HitStop, TimeStop và vẽ các hiệu ứng lên màn hình."""
+        # Update timers
         if self.hitstop_timer > 0:
             self.hitstop_timer = max(0, self.hitstop_timer - dt)
-            # Khi đang hitstop, ta có thể không update các hiệu ứng khác hoặc vẫn draw
-            # Thường thì chỉ dừng logic game, hiệu ứng vẫn nên hiện ra
+            
+        if self.time_stop_timer > 0:
+            self.time_stop_timer = max(0, self.time_stop_timer - dt)
+            # Hiệu ứng đóng băng không gian (Màu xám xanh mờ)
+            overlay = pygame.Surface(screen.get_size())
+            overlay.set_alpha(120) # Độ trong suốt
+            overlay.fill((50, 50, 70)) 
+            screen.blit(overlay, (0, 0))
+
+        # --- VẼ RAINBOW VIGNETTE (JACKPOT) ---
+        from weapon import WeaponManager
+        from arsenal import TarotCardWeapon
+        manager = WeaponManager.get_instance()
+        tarot = manager.weapons.get("TarotCard")
+        is_jackpot = tarot and getattr(tarot, "jackpot_timer", 0) > 0
+        
+        if is_jackpot:
+            self._draw_rainbow_vignette(screen)
+            self._update_and_draw_jackpot_aura(screen, dt)
 
         for dn in self.damage_numbers[:]:
             if not dn.update(dt):
                 self.damage_numbers.remove(dn)
             else:
                 dn.draw(screen, camera)
+                
+        for tp in self.text_popups[:]:
+            if not tp.update(dt):
+                self.text_popups.remove(tp)
+            else:
+                tp.draw(screen, camera)
+
+    def _draw_rainbow_vignette(self, screen):
+        import time, math
+        t = time.time() * 4.0
+        w, h = screen.get_size()
+        
+        # TỐI ƯU: Chỉ tạo 1 Surface duy nhất cho toàn bộ viền thay vì tạo trong vòng lặp
+        vignette_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        
+        # Vẽ dải mờ dần từ rìa vào (25 pixel)
+        for i in range(25):
+            alpha = int(120 * (1.0 - i/25)) # Càng vào trong càng mờ
+            r = int(127 + 127 * math.sin(t + i*0.1))
+            g = int(127 + 127 * math.sin(t + i*0.1 + 2))
+            b = int(127 + 127 * math.sin(t + i*0.1 + 4))
+            
+            pygame.draw.rect(vignette_surf, (r, g, b, alpha), (i, i, w - i*2, h - i*2), 2)
+            
+        screen.blit(vignette_surf, (0, 0))
+
+    def _update_and_draw_jackpot_aura(self, screen, dt):
+        import random, math, time
+        w, h = screen.get_size()
+        t = time.time()
+        
+        # Sinh hạt lửa mới dọc đáy màn hình
+        if len(self.jackpot_aura_particles) < 100: # Giới hạn số lượng hạt để mượt
+            for _ in range(random.randint(1, 3)):
+                self.jackpot_aura_particles.append({
+                    'pos': [random.uniform(0, w), h + 30],
+                    'vel': [random.uniform(-30, 30), random.uniform(-100, -300)],
+                    'size': random.uniform(30, 70), # Hình tròn to
+                    'life': 1.0,
+                    'offset': random.uniform(0, 10)
+                })
+            
+        for p in self.jackpot_aura_particles[:]:
+            p['pos'][0] += p['vel'][0] * dt
+            p['pos'][1] += p['vel'][1] * dt
+            p['life'] -= dt * 0.7 
+            
+            if p['life'] <= 0 or p['pos'][1] < h - 300:
+                self.jackpot_aura_particles.remove(p)
+                continue
+                
+            # Màu sắc RGB đồng bộ
+            alpha = int(p['life'] * 150)
+            color_time = t * 4.0
+            r = int(127 + 127 * math.sin(color_time))
+            g = int(127 + 127 * math.sin(color_time + 2))
+            b = int(127 + 127 * math.sin(color_time + 4))
+            
+            # VẼ Y HỆT AURA TRÊN GUI (2 lớp hình tròn đặc)
+            current_size = p['size'] * p['life']
+            # Lớp hào quang (To và mờ hơn)
+            pygame.draw.circle(screen, (r, g, b, alpha // 2), (int(p['pos'][0]), int(p['pos'][1])), int(current_size * 1.5))
+            # Lớp lõi (Đặc hơn)
+            pygame.draw.circle(screen, (r, g, b, alpha), (int(p['pos'][0]), int(p['pos'][1])), int(current_size))

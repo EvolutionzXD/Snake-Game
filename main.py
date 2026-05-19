@@ -51,6 +51,8 @@ class GameManager:
         self.game_over_menu = GameOverMenu(self.screen_width, self.screen_height)
         self.settings_menu = SettingsScreen(self.screen_width, self.screen_height)
         self.level_up_menu = LevelUpMenu(self.screen_width, self.screen_height)
+        from screens import InventoryMenu
+        self.inventory_menu = InventoryMenu(self.screen_width, self.screen_height)
         self.camera = pygame.math.Vector2(0, 0) # Khởi tạo camera mặc định để tránh crash
         
         self.running = False
@@ -84,6 +86,9 @@ class GameManager:
    
         AppleManager.Spawn((start_x, start_y))
         AppleManager.stamina = AppleManager.max_stamina
+        
+        # Nạp vũ khí từ Inventory vào trận
+        WeaponManager.get_instance().initialize_loadout()
         self.snakes = []
         # Khởi tạo camera ngay tại vị trí Táo vừa mọc
         self.camera = pygame.math.Vector2(start_x - self.screen_width/2, start_y - self.screen_height/2)
@@ -128,14 +133,9 @@ class GameManager:
             if event.type == pygame.QUIT:
                 self.running = False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1: WeaponManager.get_instance().switch_weapon("Pistol")
-                if event.key == pygame.K_2: WeaponManager.get_instance().switch_weapon("SMG")
-                if event.key == pygame.K_3: WeaponManager.get_instance().switch_weapon("AirSword")
-                if event.key == pygame.K_4: WeaponManager.get_instance().switch_weapon("FlameThrower")
-                if event.key == pygame.K_5: WeaponManager.get_instance().switch_weapon("StarPlatinum")
-                if event.key == pygame.K_6: WeaponManager.get_instance().switch_weapon("FlameExtinguisher")
-                if event.key == pygame.K_7: WeaponManager.get_instance().switch_weapon("RealitySlash") 
-                if event.key == pygame.K_8: WeaponManager.get_instance().switch_weapon("TarotCard")                
+                if event.key == pygame.K_1: WeaponManager.get_instance().switch_to_slot(0)
+                if event.key == pygame.K_2: WeaponManager.get_instance().switch_to_slot(1)
+                if event.key == pygame.K_3: WeaponManager.get_instance().switch_to_slot(2)
                 if event.key == pygame.K_q: WeaponManager.get_instance().cycle_weapon(-1)
                 if event.key == pygame.K_e: WeaponManager.get_instance().cycle_weapon(1)  
                 # Phím I và ESC sẽ được xử lý ở các block state-specific bên dưới để tránh xung đột
@@ -155,6 +155,9 @@ class GameManager:
                     
                     # Cập nhật data
                     AppleManager.load_data(save_data)
+                    from inventory import InventoryManager
+                    InventoryManager.get_instance().load_data(save_data)
+                    
                     StageManager.get_instance().max_unlocked_wave = save_data.get("unlocked_wave", 1)
                     self.main_menu.update_max_wave(StageManager.get_instance().max_unlocked_wave)
                     self.main_menu.is_level_select_mode = False # Reset mode
@@ -170,6 +173,8 @@ class GameManager:
                 elif action == "options":
                     self.settings_previous_state = "MENU"
                     self.state = "SETTINGS"
+                elif action == "inventory":
+                    self.state = "INVENTORY"
                 elif action == "quit":
                     self.running = False
             
@@ -177,6 +182,16 @@ class GameManager:
                 action = self.settings_menu.handle_event(event)
                 if action == "back" or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                     self.state = self.settings_previous_state
+
+            elif self.state == "INVENTORY":
+                action = self.inventory_menu.handle_event(event)
+                if action == "back" or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    # Lưu lại loadout khi thoát inventory
+                    from inventory import InventoryManager
+                    inv_data = InventoryManager.get_instance().save_data()
+                    # Cập nhật vào save file
+                    AppleManager.save_stats()
+                    self.state = "MENU"
             
             elif self.state == "GAMEOVER":
                 action = self.game_over_menu.handle_event(event)
@@ -420,6 +435,7 @@ class GameManager:
         for node in render_nodes: node.draw_shadow(self.screen, shaken_camera)
         for node in render_nodes: node.draw_outline(self.screen, shaken_camera)
         for node in render_nodes: node.draw_sprite(self.screen, shaken_camera)
+        for node in render_nodes: node.draw_hp_bar(self.screen, shaken_camera)
 
         if AppleManager.apple_node:
             WeaponManager.get_instance().draw(self.screen, AppleManager.GetPosition(), shaken_camera)
@@ -458,6 +474,8 @@ class GameManager:
             self.game_over_menu.draw(self.screen, dt, score, level)
         elif self.state == "LEVEL_UP":
             self.level_up_menu.draw(self.screen, dt)
+        elif self.state == "INVENTORY":
+            self.inventory_menu.draw(self.screen, dt)
             
         self.cursor.draw(self.screen, dt) # Vẽ cursor trên cả Menu
         pygame.display.flip()

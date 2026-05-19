@@ -106,8 +106,9 @@ class SettingsScreen:
             
             ToggleButton("gameplay", "show_damage_numbers", "Damage Numbers", (center_x, start_y + spacing * 6)),
             ToggleButton("gameplay", "auto_collect_exp", "Auto Collect EXP", (center_x, start_y + spacing * 7)),
+            ToggleButton("gameplay", "show_enemy_hp", "Enemy HP Bar", (center_x, start_y + spacing * 8)),
             
-            Slider("audio", "master_volume", "Master Volume", (center_x, start_y + spacing * 9)),
+            Slider("audio", "master_volume", "Master Volume", (center_x, start_y + spacing * 11)),
             # Slider("audio", "sfx_volume", "SFX Volume", (center_x, start_y + spacing * 10)),
             # Slider("audio", "bgm_volume", "BGM Volume", (center_x, start_y + spacing * 11))
         ]
@@ -154,7 +155,7 @@ class SettingsScreen:
         
         screen.blit(c_vid, (cat_x, start_y + spacing * 1 - 20))
         screen.blit(c_game, (cat_x, start_y + spacing * 6 - 20))
-        screen.blit(c_aud, (cat_x, start_y + spacing * 9 - 20))
+        screen.blit(c_aud, (cat_x, start_y + spacing * 10 - 20))
         
         # Vẽ các nút cài đặt
         for comp in self.components:

@@ -2,13 +2,14 @@
     "video": {
         "show_fps": true,
         "show_hitbox": false,
-        "show_grid": false,
+        "show_grid": true,
         "screen_shake": true,
         "particles": true
     },
     "gameplay": {
         "auto_collect_exp": true,
-        "show_damage_numbers": true
+        "show_damage_numbers": true,
+        "show_enemy_hp": true
     },
     "audio": {
         "master_volume": 1.0,

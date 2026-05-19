@@ -24,7 +24,8 @@ class SettingsManager:
             },
             "gameplay": {
                 "auto_collect_exp": False,
-                "show_damage_numbers": True
+                "show_damage_numbers": True,
+                "show_enemy_hp": True
             },
             "audio": {
                 "master_volume": 1.0,

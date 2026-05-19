@@ -26,6 +26,7 @@ class AppleManager:
     max_exp = 50
     pending_level_ups = 0
     coins = 0 # Tiền táo
+    pepper_coins = 0 # Tiền đá (Rock-coin)
 
     # Stat Levels (Dùng cho công thức (1+3%)^lvl)
     hp_lvl = 0
@@ -35,6 +36,26 @@ class AppleManager:
     
     damage_mult = 1.0
     magnet_radius = 200.0
+    
+    jackpot_stat_bonus = 0 # Thưởng thêm chỉ số khi trong trạng thái Jackpot
+
+    @classmethod
+    def recalculate_stats(cls):
+        """Tính toán lại toàn bộ chỉ số HP, Stamina, Damage dựa trên level gốc và jackpot bonus."""
+        effective_hp_lvl = min(cls.hp_lvl + cls.jackpot_stat_bonus, 999)
+        effective_stamina_lvl = min(cls.stamina_lvl + cls.jackpot_stat_bonus, 999)
+        effective_dmg_lvl = min(cls.dmg_lvl + cls.jackpot_stat_bonus, 999)
+
+        cls.max_stamina = min(100.0 * (1.03 ** effective_stamina_lvl), 999999999999)
+        cls.damage_mult = min(1.0 * (1.03 ** effective_dmg_lvl), 999999999999)
+        
+        if cls.apple_node:
+            old_max = cls.apple_node.MaxHp
+            cls.apple_node.MaxHp = min(100.0 * (1.03 ** effective_hp_lvl), 999999999999)
+            # Khi MaxHp tăng, cộng thêm phần chênh lệch vào Hp hiện tại để không bị mất máu oan
+            if cls.apple_node.MaxHp > old_max:
+                cls.apple_node.Hp += (cls.apple_node.MaxHp - old_max)
+            cls.apple_node.Hp = min(cls.apple_node.Hp, cls.apple_node.MaxHp)
 
     @classmethod
     def load_data(cls, data):
@@ -44,6 +65,7 @@ class AppleManager:
         cls.level = data.get("level", 1)
         cls.max_exp = int(50 * (1.2 ** (cls.level - 1)))
         cls.coins = data.get("coins", 0)
+        cls.pepper_coins = data.get("pepper_coins", 0)
         
         # Load levels
         cls.hp_lvl = data.get("hp_lvl", 0)
@@ -53,9 +75,8 @@ class AppleManager:
         if cls.status_points < 0: cls.status_points = 0 # Safety check
         
         # Tính toán lại stats dựa trên công thức (1.03 ^ lvl)
-        cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
+        cls.recalculate_stats()
         cls.stamina = cls.max_stamina
-        cls.damage_mult = 1.0 * (1.03 ** cls.dmg_lvl)
         
         # Sẽ apply max_hp_bonus khi Spawn()
 
@@ -93,12 +114,23 @@ class AppleManager:
             )
 
     @classmethod
+    def add_pepper(cls, amount=1):
+        """Cộng Rock-coin (Pepper) cho người chơi."""
+        cls.pepper_coins += amount
+        if cls.apple_node:
+            ParticleManager.get_instance().spawn(
+                pos=cls.apple_node.position, count=8, color=(200, 200, 200), # Màu xám đá
+                alpha=200, size_range=(3, 6), speed_range=(50, 150), 
+                lifetime=0.5, gravity=-20.0
+            )
+
+    @classmethod
     def Spawn(cls, pos):
         """Tạo node Táo tại vị trí `pos`, áp dụng config và tính MaxHp dựa trên hp_lvl hiện tại."""
         cls.apple_node = Node(pos)
         cls.apple_node.apply_config(GetAppleConfig())
         # Apply HP based on level: Base 100 * (1.03 ^ lvl)
-        cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
+        cls.recalculate_stats()
         cls.apple_node.Hp = cls.apple_node.MaxHp
 
     @classmethod
@@ -106,9 +138,11 @@ class AppleManager:
         """Lưu toàn bộ thống kê người chơi (EXP, Level, Coin, chỉ số nâng cấp) vào Slot hiện tại."""
         from save_system import SaveSystem
         from stage import StageManager
+        from inventory import InventoryManager
         SaveSystem.get_instance().save_game(
             cls.username, cls.exp, cls.level, StageManager.get_instance().max_unlocked_wave,
-            cls.hp_lvl, cls.stamina_lvl, cls.dmg_lvl, cls.coins, cls.status_points
+            cls.hp_lvl, cls.stamina_lvl, cls.dmg_lvl, cls.coins, cls.status_points,
+            InventoryManager.get_instance().save_data(), cls.pepper_coins
         )
 
     @classmethod
@@ -119,16 +153,12 @@ class AppleManager:
         
         if upgrade_id == "max_hp":
             cls.hp_lvl += 1
-            if cls.apple_node:
-                cls.apple_node.MaxHp = 100.0 * (1.03 ** cls.hp_lvl)
-                cls.apple_node.Hp = cls.apple_node.MaxHp
         elif upgrade_id == "max_stamina":
             cls.stamina_lvl += 1
-            cls.max_stamina = 100.0 * (1.03 ** cls.stamina_lvl)
-            cls.stamina = cls.max_stamina
         elif upgrade_id == "damage_mult":
             cls.dmg_lvl += 1
-            cls.damage_mult = 1.0 * (1.03 ** cls.dmg_lvl)
+        
+        cls.recalculate_stats()
         
         cls.status_points -= 1
         cls.save_stats()
@@ -148,13 +178,11 @@ class AppleManager:
         cls.stamina_lvl = 0
         cls.dmg_lvl = 0
         
-        # Reset các chỉ số về mặc định
+        # Reset các chỉ số về mặc định (nhưng vẫn giữ Jackpot bonus nếu đang có)
+        cls.recalculate_stats()
         if cls.apple_node:
-            cls.apple_node.MaxHp = 100.0
-            cls.apple_node.Hp = 100.0
-        cls.max_stamina = 100.0
-        cls.stamina = 100.0
-        cls.damage_mult = 1.0
+            cls.apple_node.Hp = cls.apple_node.MaxHp # Hồi đầy máu khi reset
+        cls.stamina = cls.max_stamina
         
         cls.save_stats()
         return True

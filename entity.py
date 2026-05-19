@@ -23,7 +23,7 @@ class Node:
                  'hitbox_radius', 'MaxHp', 'Hp', 'knockback', 'stun', 'invincibility', 
                  'damage', 'mask', 'maskOut', 'textureOffsetX', 'textureOffsetY', 
                  'MinFrame', 'MaxFrame', 'frame', 'textureWidth', 'textureHeight', 
-                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'trail_color', 'alpha', 'origin_pos', 'snake_head', 'snake_depth', 'knockback_resistance', 'can_be_stunned']
+                 'scaleMultiplier', 'hasOutline', 'hasShadow', 'flashEffect', 'is_dead', 'is_dummy', 'canShakeCamera', 'canApplyFlash', 'lifetime', 'has_heavy_hit', 'flipX', 'flipY', 'stun_on_hit', 'has_trail_particles', 'trail_color', 'alpha', 'origin_pos', 'snake_head', 'snake_depth', 'knockback_resistance', 'can_be_stunned', 'hp_bar_timer']
 
     def __init__(self, pos):
         self.position = pygame.math.Vector2(pos)
@@ -68,6 +68,7 @@ class Node:
         self.snake_depth = 0
         self.knockback_resistance = 1.0
         self.can_be_stunned = True
+        self.hp_bar_timer = 0.0
         active_nodes.append(self)
 
     def apply_config(self, config):
@@ -101,6 +102,9 @@ class Node:
     def deal_damage_to(self, other, amount):
         """Trừ máu `other` theo `amount`, hiển thị số sát thương nếu nhắm vào rắn, rúng màn hình nếu cấu hình cho phép."""
         other.Hp -= amount
+        # Chỉ hiện thanh HP nếu lượng máu mất đi đáng kể (>= 1 HP)
+        if other.MaxHp - other.Hp >= 1.0:
+            other.hp_bar_timer = 3.0 # Hiện trong 3 giây
         
         # Kiểm tra xem đòn đánh có nhắm vào kẻ địch (mask 1) không để hiện số damage
         if 1 in self.maskOut:
@@ -133,6 +137,7 @@ class Node:
         # Nếu lực đẩy cực lớn, tạo hiệu ứng dừng hình lâu hơn theo ý bạn
         if actual_force > 1500 and not getattr(self, 'has_heavy_hit', False):
             EffectManager.get_instance().trigger_hitstop(0.25) # Tăng từ 0.12 -> 0.25
+            CameraShake.get_instance().add_trauma(0.6) # Rung màn hình cho đòn nặng
             self.has_heavy_hit = True 
             
         if self.position.distance_squared_to(other.position) > 0:
@@ -217,6 +222,68 @@ class Node:
         rect = shadow_surf.get_rect(midtop=(draw_pos.x, draw_pos.y + 5 * GLOBAL_SCALE))
         screen.blit(shadow_surf, rect)
 
+    def draw_hp_bar(self, screen, camera):
+        """Vẽ thanh HP nhỏ phía trên đầu thực thể nếu vừa bị dính sát thương."""
+        if self.hp_bar_timer <= 0 or self.Hp <= 0 or self.is_dead: return
+        if self.mask == 2: return # Không vẽ thanh HP nhỏ cho người chơi (đã có GUI lớn)
+        
+        from settings import SettingsManager
+        if not SettingsManager.get_instance().get("gameplay", "show_enemy_hp"):
+            return
+
+        target = camera + _SCREEN_CENTER
+        draw_pos = (self.position - target) * GLOBAL_SCALE + _SCREEN_CENTER
+        
+        # Viewport Culling
+        if draw_pos.x < 0 or draw_pos.x > screen.get_width() or draw_pos.y < 0 or draw_pos.y > screen.get_height():
+            return
+
+        # Độ cao tùy chỉnh dựa trên kích thước của quái (Càng to thì bar càng bay cao)
+        offset_y = 35 + (20 * self.scaleMultiplier)
+        bar_w = 46 * GLOBAL_SCALE * max(0.8, self.scaleMultiplier)
+        bar_h = 7 * GLOBAL_SCALE
+        bar_y = draw_pos.y - (offset_y * GLOBAL_SCALE)
+        
+        # --- DRAW STYLE LIKE PLAYER'S GUI ---
+        bg_rect = pygame.Rect(draw_pos.x - bar_w/2, bar_y, bar_w, bar_h)
+        radius = int(bar_h // 2)
+        
+        # 1. Background (Bo góc)
+        pygame.draw.rect(screen, (30, 30, 35), bg_rect, border_radius=radius)
+        
+        inner_rect = bg_rect.inflate(-4, -4)
+        inner_radius = max(0, radius - 2)
+        hp_ratio = max(0, min(1.0, self.Hp / self.MaxHp))
+        
+        if hp_ratio > 0:
+            fill_rect = inner_rect.copy()
+            fill_rect.width = int(inner_rect.width * hp_ratio)
+            
+            # Màu sắc chuyển đổi dựa trên lượng máu
+            if hp_ratio > 0.5:
+                color = (50, 200, 70) # Xanh lá
+                hl_color = (100, 255, 120)
+            elif hp_ratio > 0.2:
+                color = (200, 180, 50) # Vàng
+                hl_color = (255, 230, 100)
+            else:
+                color = (200, 50, 50)  # Đỏ
+                hl_color = (255, 100, 100)
+
+            if fill_rect.width >= 1:
+                # 2. Thanh Fill chính
+                pygame.draw.rect(screen, color, fill_rect, border_radius=inner_radius)
+                
+                # 3. Vẽ Highlight phía trên (Cho giống GUI người chơi)
+                h_h = int(inner_rect.height * 0.4)
+                h_rect = pygame.Rect(inner_rect.x, inner_rect.y, fill_rect.width, h_h)
+                pygame.draw.rect(screen, hl_color, h_rect, 
+                                 border_top_left_radius=inner_radius, 
+                                 border_top_right_radius=inner_radius)
+        
+        # 4. Viền đen đậm (Border)
+        pygame.draw.rect(screen, (10, 10, 15), bg_rect, 2, border_radius=radius)
+
 def process_physics_and_collisions(dt):
     """Hàm cốt lõi được gọi mỗi frame:
     - Xử lý thực thể chết: tạo particle, rời EXP, dịn danh sách.
@@ -251,7 +318,7 @@ def process_physics_and_collisions(dt):
                     
                     if getattr(n, 'snake_head', None) == n:
                         from stage import StageManager
-                        StageManager.get_instance().on_snake_killed(n.position, n.MaxHp)
+                        StageManager.get_instance().on_snake_killed(n.position, n.MaxHp, n.textureName)
         
         active_nodes[:] = [n for n in active_nodes if n.Hp > 0 and not n.is_dead]
 
@@ -259,7 +326,13 @@ def process_physics_and_collisions(dt):
 
     for node in active_nodes:
         if node.lifetime > 0:
-            node.lifetime -= dt
+            is_frozen = EffectManager.get_instance().time_stop_timer > 0
+            # Chỉ những thứ "thân thiện" mới được di chuyển: Player (mask 2) hoặc Stand (texture apple_...)
+            is_friendly = (node.mask == 2) or (node.textureName.startswith("apple_"))
+            
+            if not is_frozen or is_friendly:
+                node.lifetime -= dt
+            
             if node.lifetime <= 0:
                 node.Hp = 0
                 continue
@@ -269,6 +342,14 @@ def process_physics_and_collisions(dt):
         else:
             frameVelocity = node.velocity.copy()
             node.stun -= dt
+            
+        # --- XỬ LÝ TIME STOP (ZA WARUDO) ---
+        is_frozen = EffectManager.get_instance().time_stop_timer > 0
+        is_friendly = (node.mask == 2) or (node.textureName.startswith("apple_"))
+        
+        if is_frozen and not is_friendly:
+            # Nếu đang dừng thời gian và không phải phe người chơi, đứng im tại chỗ
+            frameVelocity = pygame.math.Vector2(0, 0)
 
         node.position += frameVelocity * dt
         node.velocity *= 0.9  
@@ -309,6 +390,7 @@ def process_physics_and_collisions(dt):
 
         if node.invincibility > 0: node.invincibility -= dt
         if node.flashEffect > 0: node.flashEffect -= dt
+        if node.hp_bar_timer > 0: node.hp_bar_timer -= dt
         
         node.frame += dt * 5
         if node.frame >= (node.MaxFrame - node.MinFrame + 1):
