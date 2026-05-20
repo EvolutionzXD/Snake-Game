@@ -12,7 +12,7 @@
 | **Họ và tên** | Đặng Xuân Bách |
 | **Môn học** | IT003.Q21.TTNT |
 | **Tên đề tài** | Rắn Săn Mồi |
-
+| **Link demo** | https://drive.google.com/file/d/1qs7hp8pX0xXpva02l5YgtSPYvwNvLHO1/view?usp=sharing |
 ---
 
 ## 🎮 Giới Thiệu Game
